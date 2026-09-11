@@ -1,4 +1,4 @@
-import type { PublicPuzzle } from './types';
+import type { PublicPuzzle, PuzzleStatus } from './types';
 
 type Fixture = PublicPuzzle & { answer: string[] };
 const make = (id: string, title: string, labels: string[], values: number[], answer: number[]): Fixture => ({
@@ -15,6 +15,15 @@ export const fixtures: Record<string, Fixture> = {
   commuters: make('commuters', 'How are commuters split among these transportation methods?', ['Car', 'Public transit', 'Walking', 'Cycling', 'Work from home'], [22, 16, 37, 14, 11], [1, 2, 0, 4, 3]),
   close: make('close', 'Can you place these close slices in order?', ['24%', '22%', '20%', '18%', '16%'], [22, 20, 24, 16, 18], [1, 2, 0, 4, 3]),
   dominant: make('dominant', 'Can you spot the dominant slice?', ['51%', '19%', '13%', '10%', '7%'], [19, 13, 51, 7, 10], [1, 2, 0, 4, 3]),
+};
+
+export const fixtureSchedule: Record<string, { dateOffset: number; status: PuzzleStatus }> = {
+  households: { dateOffset: 0, status: 'published' },
+  spending: { dateOffset: -1, status: 'published' },
+  videos: { dateOffset: -2, status: 'published' },
+  commuters: { dateOffset: -3, status: 'published' },
+  close: { dateOffset: 2, status: 'scheduled' },
+  dominant: { dateOffset: -4, status: 'published' },
 };
 
 export const fixtureAliases: Record<string, string> = { household: 'households', householdsize: 'households' };

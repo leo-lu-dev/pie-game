@@ -9,9 +9,9 @@ import type { GuessResponse, PublicPuzzle, SavedGuess } from '../lib/types';
 import type { PlayerStatistics } from '../lib/types';
 import { shareText } from '../lib/sharing';
 
-type Props = { puzzleKey?: string };
+type Props = { puzzleKey?: string; devOptions?: { fixture?: string; date?: string; state?: string } };
 
-export default function Game({ puzzleKey = 'households' }: Props) {
+export default function Game({ puzzleKey, devOptions }: Props) {
   const [puzzle, setPuzzle] = useState<PublicPuzzle | null>(null);
   const [mapping, setMapping] = useState<(string | null)[]>(Array(5).fill(null));
   const [locked, setLocked] = useState<boolean[]>(Array(5).fill(false));
@@ -29,7 +29,8 @@ export default function Game({ puzzleKey = 'households' }: Props) {
   useEffect(() => {
     let cancelled = false;
     setPuzzle(null); setMapping(Array(5).fill(null)); setLocked(Array(5).fill(false)); setSelected(null); setAttempts(0); setResult('playing'); setError(null); setStatistics(null); setCopied(false); setSubmittedGuesses([]); setShowResults(true);
-    ensureAnonymousSession().then(() => fetch(`/api/puzzles/${encodeURIComponent(puzzleKey)}`)).then(async response => { if (!response.ok) throw new Error((await response.json()).error || 'Unable to load puzzle'); return response.json() as Promise<PublicPuzzle>; }).then(data => {
+    const endpoint = puzzleKey ? `/api/puzzles/${encodeURIComponent(puzzleKey)}` : `/api/puzzle/today${devOptions ? `?${new URLSearchParams(Object.entries(devOptions).filter((entry): entry is [string, string] => Boolean(entry[1])))}` : ''}`;
+    ensureAnonymousSession().then(() => fetch(endpoint)).then(async response => { if (!response.ok) throw new Error((await response.json()).error || 'Unable to load puzzle'); return response.json() as Promise<PublicPuzzle>; }).then(data => {
       if (cancelled) return;
       const state = data.state;
       setSubmittedGuesses(state?.guesses || []);
@@ -164,6 +165,6 @@ export default function Game({ puzzleKey = 'households' }: Props) {
         </div>
       )}
     </section>
-    <footer className="mx-auto mt-4 flex max-w-4xl flex-wrap items-center justify-between gap-3 text-xs text-[#8a9690]"><span>New puzzle every day · local prototype</span><span>Try another: <a className="font-bold underline" href="/?puzzle=spending">spending</a> · <a className="font-bold underline" href="/?puzzle=commuters">commuters</a> · <a className="font-bold underline" href="/?puzzle=videos">videos</a></span></footer>
+    <footer className="mx-auto mt-4 flex max-w-4xl items-center justify-center text-xs text-[#8a9690]"><span>New puzzle every day</span></footer>
   </main>;
 }

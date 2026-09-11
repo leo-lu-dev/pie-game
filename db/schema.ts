@@ -1,4 +1,5 @@
 import { boolean, date, integer, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import type { PuzzleStatus } from '../lib/types';
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -7,9 +8,9 @@ const timestamps = {
 
 export const puzzles = pgTable('puzzles', {
   id: text('id').primaryKey(), slug: text('slug').notNull().unique(), title: text('title').notNull(),
-  context: text('context'), maxAttempts: integer('max_attempts').notNull(), status: text('status').notNull(),
-  publishDate: date('publish_date').notNull(), sourceName: text('source_name'), sourceUrl: text('source_url'), ...timestamps,
-});
+  context: text('context'), maxAttempts: integer('max_attempts').notNull(), status: text('status').$type<PuzzleStatus>().notNull(),
+  publishDate: date('publish_date').notNull(), sourceName: text('source_name'), sourceUrl: text('source_url'), sourceMetadata: jsonb('source_metadata').$type<Record<string, unknown>>(), ...timestamps,
+}, table => ({ publishDateUnique: unique('puzzles_publish_date_unique').on(table.publishDate) }));
 
 export const puzzleCategories = pgTable('puzzle_categories', {
   id: text('id').primaryKey(), puzzleId: text('puzzle_id').notNull().references(() => puzzles.id, { onDelete: 'cascade' }),

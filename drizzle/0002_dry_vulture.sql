@@ -1,0 +1,1 @@
+ALTER TABLE "puzzles" ADD CONSTRAINT "puzzles_publish_date_unique" UNIQUE("publish_date");

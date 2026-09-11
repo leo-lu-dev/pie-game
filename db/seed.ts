@@ -2,16 +2,22 @@ import { fixtures } from '../lib/fixtures';
 import { eq } from 'drizzle-orm';
 import { db, client } from './client';
 import { puzzleCategories, puzzles } from './schema';
+import { fixtureSchedule } from '../lib/fixtures';
 
 async function seed() {
-  for (const fixture of Object.values(fixtures)) {
+  const fixturesToSeed = Object.values(fixtures);
+  for (let index = 0; index < fixturesToSeed.length; index += 1) {
+    const fixture = fixturesToSeed[index];
+    const publishDate = new Date();
+    publishDate.setUTCDate(publishDate.getUTCDate() + fixtureSchedule[fixture.id].dateOffset);
     const sliceOrderByOriginalIndex = fixture.slices.map((_, index) => index)
       .sort((a, b) => fixture.slices[b].value - fixture.slices[a].value || a - b)
       .reduce<Record<number, number>>((order, originalIndex, displayIndex) => {
         order[originalIndex] = displayIndex;
         return order;
       }, {});
-    await db.insert(puzzles).values({ id: fixture.id, slug: fixture.id, title: fixture.title, context: fixture.context ?? null, maxAttempts: fixture.maxAttempts, status: 'published', publishDate: new Date().toISOString().slice(0, 10), sourceName: 'Pie of the Day', sourceUrl: null }).onConflictDoUpdate({ target: puzzles.id, set: { title: fixture.title, maxAttempts: fixture.maxAttempts, updatedAt: new Date() } });
+    const schedule = fixtureSchedule[fixture.id];
+    await db.insert(puzzles).values({ id: fixture.id, slug: fixture.id, title: fixture.title, context: fixture.context ?? null, maxAttempts: fixture.maxAttempts, status: schedule.status, publishDate: publishDate.toISOString().slice(0, 10), sourceName: 'Pie of the Day', sourceUrl: null, sourceMetadata: { fixture: true, fixtureId: fixture.id } }).onConflictDoUpdate({ target: puzzles.id, set: { title: fixture.title, maxAttempts: fixture.maxAttempts, publishDate: publishDate.toISOString().slice(0, 10), status: schedule.status, sourceMetadata: { fixture: true, fixtureId: fixture.id }, updatedAt: new Date() } });
     await db.delete(puzzleCategories).where(eq(puzzleCategories.puzzleId, fixture.id));
     await db.insert(puzzleCategories).values(fixture.categories.map(category => {
       const originalSliceIndex = fixture.answer.indexOf(category.id);
