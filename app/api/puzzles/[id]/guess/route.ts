@@ -1,27 +1,29 @@
+import { and, asc, eq } from 'drizzle-orm';
+import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
-import { getFixture } from '../../../../../lib/fixtures';
-import { cookieName, sessionFor } from '../../../../../lib/session';
+import { db } from '../../../../../db/client';
+import { gameResults, guesses, puzzleCategories, puzzles } from '../../../../../db/schema';
+import { sessionFor } from '../../../../../lib/session';
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const fixture = getFixture(params.id);
-  if (!fixture) return NextResponse.json({ error: 'Unknown puzzle' }, { status: 404 });
-  const { id, session } = sessionFor(params.id);
-  let body: unknown;
-  try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+  const [puzzle] = await db.select().from(puzzles).where(eq(puzzles.slug, params.id)).limit(1);
+  if (!puzzle) return NextResponse.json({ error: 'Unknown puzzle' }, { status: 404 });
+  const categories = await db.select().from(puzzleCategories).where(eq(puzzleCategories.puzzleId, puzzle.id)).orderBy(asc(puzzleCategories.sliceOrder));
+  let playerId: string, game;
+  try { ({ playerId, game } = await sessionFor(puzzle.id)); } catch { return NextResponse.json({ error: 'Anonymous authentication is required' }, { status: 401 }); }
+  let body: unknown; try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   const assignments = body && typeof body === 'object' && Array.isArray((body as { assignments?: unknown }).assignments) ? (body as { assignments: unknown[] }).assignments : null;
-  if (!assignments || assignments.length !== 5 || assignments.some(value => typeof value !== 'string')) return NextResponse.json({ error: 'Exactly five assignments are required' }, { status: 400 });
-  const ids = assignments as string[];
-  const validCategories = new Set(fixture.categories.map(category => category.id));
-  if (new Set(ids).size !== 5) return NextResponse.json({ error: 'Assignments must be unique' }, { status: 400 });
-  if (ids.some(categoryId => !validCategories.has(categoryId))) return NextResponse.json({ error: 'Unknown category ID' }, { status: 400 });
-  if (session.solved) return NextResponse.json({ error: 'Puzzle already solved' }, { status: 409 });
-  if (session.attempts >= fixture.maxAttempts) return NextResponse.json({ error: 'Attempt limit reached' }, { status: 409 });
-  const correctPositions = fixture.answer.map((categoryId, index) => categoryId === ids[index]);
-  const correctCount = correctPositions.filter(Boolean).length;
-  const solved = correctCount === 5;
-  session.attempts += 1; session.solved = solved;
-  const terminal = solved || session.attempts >= fixture.maxAttempts;
-  const response = NextResponse.json({ attempt: session.attempts, correctPositions, correctCount, solved, remainingAttempts: fixture.maxAttempts - session.attempts, ...(terminal ? { reveal: fixture.answer } : {}) });
-  response.cookies.set(cookieName, id, { httpOnly: true, sameSite: 'lax', path: '/' });
+  if (!assignments || assignments.length !== categories.length || assignments.some(v => typeof v !== 'string')) return NextResponse.json({ error: `Exactly ${categories.length} assignments are required` }, { status: 400 });
+  const ids = assignments as string[], valid = new Set(categories.map(c => c.id));
+  if (new Set(ids).size !== categories.length || ids.some(id => !valid.has(id))) return NextResponse.json({ error: 'Assignments must contain each category exactly once' }, { status: 400 });
+  if (game.solved) return NextResponse.json({ error: 'Puzzle already solved' }, { status: 409 });
+  if (game.attemptCount >= puzzle.maxAttempts) return NextResponse.json({ error: 'Attempt limit reached' }, { status: 409 });
+  const correctPositions = categories.map((c, i) => c.id === ids[i]);
+  const correctCount = correctPositions.filter(Boolean).length, attempt = game.attemptCount + 1, solved = correctCount === categories.length, terminal = solved || attempt >= puzzle.maxAttempts;
+  await db.transaction(async tx => {
+    await tx.insert(guesses).values({ id: randomUUID(), gameResultId: game.id, attemptNumber: attempt, assignmentsJson: ids, correctPositionsJson: correctPositions, correctCount });
+    await tx.update(gameResults).set({ attemptCount: attempt, solved, completedAt: terminal ? new Date() : null, updatedAt: new Date() }).where(and(eq(gameResults.id, game.id), eq(gameResults.playerId, playerId)));
+  });
+  const response = NextResponse.json({ attempt, correctPositions, correctCount, solved, remainingAttempts: puzzle.maxAttempts - attempt, ...(terminal ? { reveal: categories.map(c => c.id) } : {}) });
   return response;
 }

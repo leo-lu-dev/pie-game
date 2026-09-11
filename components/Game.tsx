@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import PieBoard from './PieBoard';
+import AccountUpgrade from './AccountUpgrade';
+import { ensureAnonymousSession } from '../lib/supabase/browser';
 import { normalizeValues } from '../lib/normalize';
 import type { GuessResponse, PublicPuzzle } from '../lib/types';
 
@@ -21,7 +23,27 @@ export default function Game({ puzzleKey = 'households' }: Props) {
   useEffect(() => {
     let cancelled = false;
     setPuzzle(null); setMapping(Array(5).fill(null)); setLocked(Array(5).fill(false)); setSelected(null); setAttempts(0); setResult('playing'); setError(null);
-    fetch(`/api/puzzles/${encodeURIComponent(puzzleKey)}`).then(async response => { if (!response.ok) throw new Error((await response.json()).error || 'Unable to load puzzle'); return response.json() as Promise<PublicPuzzle>; }).then(data => { if (!cancelled) setPuzzle(data); }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : 'Unable to load puzzle'); });
+    ensureAnonymousSession().then(() => fetch(`/api/puzzles/${encodeURIComponent(puzzleKey)}`)).then(async response => { if (!response.ok) throw new Error((await response.json()).error || 'Unable to load puzzle'); return response.json() as Promise<PublicPuzzle>; }).then(data => {
+      if (cancelled) return;
+      const state = data.state;
+      if (state && state.guesses.length) {
+        const lockedPositions = Array(data.slices.length).fill(false) as boolean[];
+        state.guesses.forEach(guess => guess.correctPositions.forEach((correct, index) => { lockedPositions[index] ||= correct; }));
+        const latest = state.guesses[state.guesses.length - 1];
+        setLocked(lockedPositions);
+        setMapping(latest.assignments.map((id, index) => lockedPositions[index] ? id : null));
+      }
+      setAttempts(state?.attempts || 0);
+      if (state?.solved) {
+        const latest = state.guesses[state.guesses.length - 1];
+        setMapping(state.reveal || latest?.assignments || []);
+        setResult('won');
+      } else if ((state?.attempts || 0) >= data.maxAttempts) {
+        setMapping(state?.reveal || []);
+        setResult('lost');
+      }
+      setPuzzle(data);
+    }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : 'Unable to load puzzle'); });
     return () => { cancelled = true; };
   }, [puzzleKey]);
 
@@ -54,7 +76,7 @@ export default function Game({ puzzleKey = 'households' }: Props) {
       if (!response.ok) throw new Error(data.error || 'Guess could not be submitted');
       setAttempts(data.attempt); setLocked(current => current.map((value, i) => value || data.correctPositions[i]));
       if (data.solved || data.reveal) { setMapping(data.reveal || mapping); setResult(data.solved ? 'won' : 'lost'); }
-      else { setShaking(true); window.setTimeout(() => { setShaking(false); setMapping(current => current.map((value, i) => data.correctPositions[i] ? value : null)); setSelected(null); }, 420); }
+    else { setShaking(true); window.setTimeout(() => { setShaking(false); setMapping(current => current.map((value, i) => data.correctPositions[i] ? value : null)); setSelected(null); }, 420); }
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Guess could not be submitted'); }
     finally { setSubmitting(false); }
   }
@@ -68,7 +90,7 @@ export default function Game({ puzzleKey = 'households' }: Props) {
       <div onDragOver={event => event.preventDefault()} onDrop={dropInPool} className="mt-4 min-h-28 border-t border-[#edf0ed] pt-6"><p className="mb-3 text-center text-xs font-bold uppercase tracking-widest text-[#8a9690]">{selected ? 'Choose another item to swap' : 'Drag labels to slices · drag back here to remove'}</p><div className="option-pool">{puzzle.categories.map(category => { const inPool = pool.some(item => item.id === category.id); return <button key={category.id} draggable={inPool && result === 'playing'} onDragStart={event => startDrag(event, category.id)} onClick={() => clickCategory(category.id)} disabled={!inPool || result !== 'playing'} className={`answer-card ${!inPool ? 'pointer-events-none invisible' : 'cursor-grab border-[#dce4de] bg-white hover:border-[#f06d3c] active:cursor-grabbing'} ${selected === category.id ? 'border-[#f06d3c] bg-[#fff0e9] text-[#c64c22]' : ''}`}>{category.label}</button>; })}</div></div>
       <div className="mt-4 flex items-center justify-center gap-6"><span className="text-sm font-bold text-[#61706a]">{attempts} / {puzzle.maxAttempts} guesses</span><button onClick={submit} disabled={submitting || !complete || result !== 'playing'} className="rounded-full bg-[#f06d3c] px-6 py-3 text-sm font-black text-white shadow-lg shadow-[#f06d3c]/20 transition hover:bg-[#db5b2c] disabled:cursor-not-allowed disabled:bg-[#d8dfda] disabled:shadow-none">{submitting ? 'Checking…' : 'Submit guess'}</button></div>
       {error && <p className="mt-4 text-center text-sm font-bold text-[#c64c22]">{error}</p>}
-      {result !== 'playing' && <div className={`mt-7 rounded-2xl p-5 ${result === 'won' ? 'bg-[#e2f5ed]' : 'bg-[#fff0e9]'}`}><div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-black">{result === 'won' ? 'You nailed it!' : 'That was a tough one.'}</h2><p className="mt-1 text-sm text-[#61706a]">{result === 'won' ? `Solved in ${attempts} ${attempts === 1 ? 'guess' : 'guesses'}.` : 'Here is the complete reveal.'}</p></div><button onClick={reset} className="rounded-full border border-[#b8c9bf] px-4 py-2 text-xs font-bold">Play again</button></div><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5">{puzzle.categories.map(category => { const index = mapping.indexOf(category.id); return <div key={category.id} className="rounded-xl bg-white/70 p-3"><div className="text-xs font-bold text-[#61706a]">{category.label}</div><div className="mt-1 text-lg font-black">{index >= 0 ? `${values[index]}%` : '—'}</div></div>; })}</div></div>}
+      {result !== 'playing' && <div className={`mt-7 rounded-2xl p-5 ${result === 'won' ? 'bg-[#e2f5ed]' : 'bg-[#fff0e9]'}`}><div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-black">{result === 'won' ? 'You nailed it!' : 'That was a tough one.'}</h2><p className="mt-1 text-sm text-[#61706a]">{result === 'won' ? `Solved in ${attempts} ${attempts === 1 ? 'guess' : 'guesses'}.` : 'Here is the complete reveal.'}</p></div><button onClick={reset} className="rounded-full border border-[#b8c9bf] px-4 py-2 text-xs font-bold">Play again</button></div><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5">{puzzle.categories.map(category => { const index = mapping.indexOf(category.id); return <div key={category.id} className="rounded-xl bg-white/70 p-3"><div className="text-xs font-bold text-[#61706a]">{category.label}</div><div className="mt-1 text-lg font-black">{index >= 0 ? `${values[index]}%` : '—'}</div></div>; })}</div><AccountUpgrade /></div>}
     </section>
     <footer className="mx-auto mt-4 flex max-w-4xl flex-wrap items-center justify-between gap-3 text-xs text-[#8a9690]"><span>New puzzle every day · local prototype</span><span>Try another: <a className="font-bold underline" href="/?puzzle=spending">spending</a> · <a className="font-bold underline" href="/?puzzle=commuters">commuters</a> · <a className="font-bold underline" href="/?puzzle=videos">videos</a></span></footer>
   </main>;

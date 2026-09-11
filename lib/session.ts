@@ -1,21 +1,14 @@
 import { randomUUID } from 'crypto';
-import { cookies } from 'next/headers';
+import { and, eq } from 'drizzle-orm';
+import { db } from '../db/client';
+import { gameResults } from '../db/schema';
+import { createSupabaseServerClient } from './supabase/server';
 
-export type Session = { attempts: number; solved: boolean };
-const sessions = new Map<string, Session>();
-export const cookieName = 'pie-session';
-
-export function sessionFor(scope = 'default') {
-  const existing = cookies().get(cookieName)?.value;
-  const id = existing || randomUUID();
-  const key = `${id}:${scope}`;
-  const session = sessions.get(key) || { attempts: 0, solved: false };
-  sessions.set(key, session);
-  return { id, session, isNew: !existing };
-}
-
-export function resetSession(scope = 'default') {
-  const id = cookies().get(cookieName)?.value || randomUUID();
-  sessions.set(`${id}:${scope}`, { attempts: 0, solved: false });
-  return id;
+export async function sessionFor(puzzleId: string) {
+  const { data: { user }, error } = await createSupabaseServerClient().auth.getUser();
+  if (error || !user) throw new Error('AUTH_REQUIRED');
+  const playerId = user.id;
+  let [game] = await db.select().from(gameResults).where(and(eq(gameResults.playerId, playerId), eq(gameResults.puzzleId, puzzleId))).limit(1);
+  if (!game) [game] = await db.insert(gameResults).values({ id: randomUUID(), playerId, puzzleId }).returning();
+  return { playerId, game, user };
 }

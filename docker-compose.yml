@@ -1,0 +1,13 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: pie
+      POSTGRES_PASSWORD: pie
+      POSTGRES_DB: pie_game
+    volumes:
+      - pie-postgres:/var/lib/postgresql/data
+volumes:
+  pie-postgres:
