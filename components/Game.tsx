@@ -29,7 +29,14 @@ export default function Game({ puzzleKey, devOptions }: Props) {
   useEffect(() => {
     let cancelled = false;
     setPuzzle(null); setMapping(Array(5).fill(null)); setLocked(Array(5).fill(false)); setSelected(null); setAttempts(0); setResult('playing'); setError(null); setStatistics(null); setCopied(false); setSubmittedGuesses([]); setShowResults(true);
-    const endpoint = puzzleKey ? `/api/puzzles/${encodeURIComponent(puzzleKey)}` : `/api/puzzle/today${devOptions ? `?${new URLSearchParams(Object.entries(devOptions).filter((entry): entry is [string, string] => Boolean(entry[1])))}` : ''}`;
+    const endpoint = puzzleKey
+      ? `/api/puzzles/${encodeURIComponent(puzzleKey)}`
+      : (() => {
+        const params = new URLSearchParams(Object.entries(devOptions || {}).filter((entry): entry is [string, string] => Boolean(entry[1])));
+        params.set('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone);
+        const query = params.toString();
+        return `/api/puzzle/today${query ? `?${query}` : ''}`;
+      })();
     ensureAnonymousSession().then(() => fetch(endpoint)).then(async response => { if (!response.ok) throw new Error((await response.json()).error || 'Unable to load puzzle'); return response.json() as Promise<PublicPuzzle>; }).then(data => {
       if (cancelled) return;
       const state = data.state;

@@ -6,14 +6,24 @@ import { sessionFor } from '../../../../lib/session';
 
 export const dynamic = 'force-dynamic';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = (timeZone: string) => {
+  let formatter: Intl.DateTimeFormat;
+  try {
+    formatter = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+  } catch {
+    formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' });
+  }
+  const parts = Object.fromEntries(formatter.formatToParts(new Date()).map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
 
 export async function GET(request: NextRequest) {
   const devMode = process.env.NODE_ENV !== 'production';
   const fixture = devMode ? request.nextUrl.searchParams.get('fixture') : null;
   const requestedDate = devMode ? request.nextUrl.searchParams.get('date') : null;
   const simulatedState = devMode ? request.nextUrl.searchParams.get('state') : null;
-  const date = requestedDate || today();
+  const timeZone = request.nextUrl.searchParams.get('timezone') || 'UTC';
+  const date = requestedDate || today(timeZone);
   const [puzzle] = fixture
     ? await db.select().from(puzzles).where(eq(puzzles.slug, fixture)).limit(1)
     : await db.select().from(puzzles).where(and(eq(puzzles.publishDate, date), eq(puzzles.status, 'published'))).orderBy(asc(puzzles.publishDate), asc(puzzles.slug)).limit(1);
