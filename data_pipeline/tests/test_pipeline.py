@@ -2,6 +2,8 @@ import unittest
 
 from data_pipeline.models.candidate import CandidateCategory, CandidatePuzzle
 from data_pipeline.models.review import AgentReview
+from data_pipeline.agents.critic import AgentCriticError, parse_review, review_candidate
+from data_pipeline.agents.prompts import build_review_prompt
 from data_pipeline.models.source import SourceDataset, SourceValue
 from data_pipeline.transforms import four_plus_other, meaningful_subset
 from data_pipeline.validation import diagnostics_for, validate_candidate, validate_candidate_against_source, validate_source
@@ -62,6 +64,29 @@ class PipelineContractTests(unittest.TestCase):
             recommended_action="human_review",
         )
         self.assertEqual(review.recommended_action, "human_review")
+
+    def test_critic_parses_json_and_prompt_excludes_raw_payload(self):
+        candidate = CandidatePuzzle(
+            source_name="Example", source_dataset_id="example-1", topic="Example", title="How is it divided?",
+            transformation_type="natural-five",
+            categories=[CandidateCategory(id=str(i), label=str(i), raw_value=i) for i in range(1, 6)],
+            source_metadata={"provenance": "example"},
+        )
+        response = '{"verdict":"review","semantic_validity":true,"denominator_clear":true,"question_accurate":true,"general_audience_fit":4,"intuition_potential":3,"obviousness_risk":"low","niche_risk":"low","misleading_risk":"low","category_quality":"good","issues":[],"suggested_title":null,"suggested_context":null,"recommended_action":"human_review"}'
+
+        class FakeTransport:
+            def complete(self, *, system_prompt: str, user_prompt: str) -> str:
+                self.prompt = user_prompt
+                return response
+
+        transport = FakeTransport()
+        parsed = review_candidate(candidate, None, transport)
+        self.assertEqual(parsed.verdict, "review")
+        self.assertNotIn("raw_payload", transport.prompt)
+
+    def test_critic_rejects_malformed_json(self):
+        with self.assertRaises(AgentCriticError):
+            parse_review("not json")
 
     def test_four_plus_other_is_verified_against_source(self):
         source = SourceDataset(

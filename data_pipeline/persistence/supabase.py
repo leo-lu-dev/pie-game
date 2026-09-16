@@ -11,6 +11,7 @@ import psycopg
 
 from ..models.candidate import CandidatePuzzle
 from ..models.source import SourceDataset
+from ..models.review import AgentReview
 from ..validation import ValidationResult
 
 
@@ -69,3 +70,14 @@ def persist_candidate(candidate: CandidatePuzzle, source: SourceDataset, validat
             )
     return candidate_id
 
+
+def persist_agent_review(candidate_id: str, review: AgentReview, model: str, prompt_version: str, connection: psycopg.Connection[Any]) -> str:
+    """Append an agent review without overwriting earlier reviews."""
+    review_id = str(uuid4())
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO candidate_agent_reviews (id, candidate_id, model, prompt_version, verdict, review_json) VALUES (%s, %s, %s, %s, %s, %s)",
+                (review_id, candidate_id, model, prompt_version, review.verdict, _json(review.model_dump())),
+            )
+    return review_id
