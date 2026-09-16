@@ -4,7 +4,7 @@ from data_pipeline.models.candidate import CandidateCategory, CandidatePuzzle
 from data_pipeline.models.review import AgentReview
 from data_pipeline.models.source import SourceDataset, SourceValue
 from data_pipeline.transforms import four_plus_other, meaningful_subset
-from data_pipeline.validation import diagnostics_for, validate_candidate, validate_source
+from data_pipeline.validation import diagnostics_for, validate_candidate, validate_candidate_against_source, validate_source
 
 
 class PipelineContractTests(unittest.TestCase):
@@ -63,7 +63,41 @@ class PipelineContractTests(unittest.TestCase):
         )
         self.assertEqual(review.recommended_action, "human_review")
 
+    def test_four_plus_other_is_verified_against_source(self):
+        source = SourceDataset(
+            source_name="Example", source_dataset_id="example-1", measure="count",
+            values=[SourceValue(category_id=letter, category_label=letter, value=value) for letter, value in zip("ABCDEFG", [30, 25, 15, 10, 8, 7, 5])],
+            raw_payload={},
+        )
+        categories, metadata = four_plus_other(
+            [CandidateCategory(id=letter, label=letter, raw_value=value) for letter, value in zip("ABCDEFG", [30, 25, 15, 10, 8, 7, 5])],
+            ["A", "B", "C", "D"],
+        )
+        candidate = CandidatePuzzle(
+            source_name="Example", source_dataset_id="example-1", topic="Example", title="How is it divided?",
+            transformation_type="four-plus-other", categories=categories, transformation_metadata=metadata,
+        )
+        self.assertTrue(validate_candidate_against_source(candidate, source).valid)
+
+    def test_four_plus_other_rejects_incorrect_other_value(self):
+        source = SourceDataset(
+            source_name="Example", source_dataset_id="example-1", measure="count",
+            values=[SourceValue(category_id=letter, category_label=letter, value=value) for letter, value in zip("ABCDEFG", [30, 25, 15, 10, 8, 7, 5])],
+            raw_payload={},
+        )
+        categories, metadata = four_plus_other(
+            [CandidateCategory(id=letter, label=letter, raw_value=value) for letter, value in zip("ABCDEFG", [30, 25, 15, 10, 8, 7, 5])],
+            ["A", "B", "C", "D"],
+        )
+        categories[-1] = CandidateCategory(id="other", label="Other", raw_value=19)
+        candidate = CandidatePuzzle(
+            source_name="Example", source_dataset_id="example-1", topic="Example", title="How is it divided?",
+            transformation_type="four-plus-other", categories=categories, transformation_metadata=metadata,
+        )
+        report = validate_candidate_against_source(candidate, source)
+        self.assertFalse(report.valid)
+        self.assertIn("Other does not equal the sum of its source categories", report.issues)
+
 
 if __name__ == "__main__":
     unittest.main()
-
