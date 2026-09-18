@@ -99,6 +99,7 @@ def promote_candidate(connection: psycopg.Connection[Any], candidate_id: str, pu
             categories = list(cursor.fetchall())
             if len(categories) != 5 or len({row['category_key'] for row in categories}) != 5:
                 raise ValueError('Promotion requires exactly five distinct categories')
+            categories.sort(key=lambda row: (-float(row['raw_value']), row['display_order']))
             cursor.execute('SELECT id FROM puzzles WHERE candidate_id = %s', (candidate_id,))
             if cursor.fetchone() is not None:
                 raise ValueError('Candidate has already been promoted')
@@ -112,6 +113,6 @@ def promote_candidate(connection: psycopg.Connection[Any], candidate_id: str, pu
                 'source': candidate['source_metadata_json'],
             }
             cursor.execute('INSERT INTO puzzles (id, slug, title, context, max_attempts, status, publish_date, source_name, source_url, source_metadata, candidate_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)', (puzzle_id, slug, candidate['title'], candidate['context'], 4, 'scheduled', publish_date, candidate['source_name'], candidate['source_url'], Jsonb(source_metadata), candidate_id))
-            cursor.executemany('INSERT INTO puzzle_categories (id, puzzle_id, category_key, label, raw_value, slice_order) VALUES (%s, %s, %s, %s, %s, %s)', [(str(uuid4()), puzzle_id, row['category_key'], row['label'], row['raw_value'], row['display_order']) for row in categories])
+            cursor.executemany('INSERT INTO puzzle_categories (id, puzzle_id, category_key, label, raw_value, slice_order) VALUES (%s, %s, %s, %s, %s, %s)', [(str(uuid4()), puzzle_id, row['category_key'], row['label'], row['raw_value'], index) for index, row in enumerate(categories)])
             cursor.execute("UPDATE puzzle_candidates SET status = 'promoted', updated_at = now() WHERE id = %s", (candidate_id,))
     return slug

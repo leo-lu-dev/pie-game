@@ -35,7 +35,7 @@ export async function GET() {
   reviews.forEach(review => { if (!latestReviewByCandidate.has(review.candidateId)) latestReviewByCandidate.set(review.candidateId, review); });
 
   const candidateItems = candidates.map(candidate => {
-    const candidateCategories = categoriesByCandidate.get(candidate.id) || [];
+    const candidateCategories = [...(categoriesByCandidate.get(candidate.id) || [])].sort((a, b) => Number(b.rawValue) - Number(a.rawValue) || a.displayOrder - b.displayOrder);
     const puzzle = {
       id: candidate.id,
       title: candidate.title,

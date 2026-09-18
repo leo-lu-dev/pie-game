@@ -65,9 +65,10 @@ def persist_candidate(candidate: CandidatePuzzle, source: SourceDataset, validat
                     _json(candidate_data["transformation_metadata"]), _json(source.source_metadata), _json(source.raw_payload), status,
                 ),
             )
+            ordered_categories = sorted(enumerate(candidate.categories), key=lambda item: (-item[1].raw_value, item[0]))
             cursor.executemany(
                 "INSERT INTO candidate_categories (id, candidate_id, category_key, label, raw_value, display_order) VALUES (%s, %s, %s, %s, %s, %s)",
-                [(str(uuid4()), candidate_id, category.id, category.label, str(category.raw_value), index) for index, category in enumerate(candidate.categories)],
+                [(str(uuid4()), candidate_id, category.id, category.label, str(category.raw_value), index) for index, (_, category) in enumerate(ordered_categories)],
             )
             cursor.execute(
                 "INSERT INTO candidate_validations (id, candidate_id, technical_valid, dimension_valid, transformation_valid, diagnostics_json, issues_json) VALUES (%s, %s, %s, %s, %s, %s, %s)",
