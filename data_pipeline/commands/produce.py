@@ -43,7 +43,14 @@ def passed(review):
             and review.semantic_validity and review.denominator_clear and review.question_accurate)
 
 
-def produce(count: int) -> None:
+def produce(count: int, source: str = "datacommons") -> int:
+    if source != "datacommons":
+        from .produce_external import produce_external
+
+        accepted = produce_external(count, source if source in {"owid", "eurostat"} else "all")
+        if source == "all" and accepted < count:
+            accepted += produce(count - accepted, "datacommons")
+        return accepted
     accepted = 0
     state_path = STATE_PATH
     try:
@@ -136,20 +143,24 @@ def produce(count: int) -> None:
             if accepted < count:
                 print('[pipeline] Target not reached; searching new subject areas.', flush=True)
     print(f'[pipeline] Complete: {accepted} new AI-vetted puzzles ready for human testing.', flush=True)
+    return accepted
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--count', required=True, type=int)
+    parser.add_argument('--source', choices=['all', 'datacommons', 'owid', 'eurostat'], default='datacommons')
     args = parser.parse_args()
     if args.count < 1:
         parser.error('--count must be positive')
     try:
-        produce(args.count)
+        accepted = produce(args.count, args.source)
     except AgentCriticError as error:
         raise SystemExit(f'AI review unavailable after retries: {error}')
     except KeyboardInterrupt:
         raise SystemExit('Stopped by user; saved candidates and reviews are retained.')
+    if accepted < args.count:
+        raise SystemExit(f'Only {accepted}/{args.count} candidates passed the full pipeline.')
 
 
 if __name__ == '__main__':

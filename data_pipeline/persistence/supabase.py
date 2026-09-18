@@ -47,25 +47,34 @@ def persist_candidate(candidate: CandidatePuzzle, source: SourceDataset, validat
     status = "validated" if validation.valid else "ingested"
     diagnostics = validation.diagnostics.__dict__ if validation.diagnostics else None
     candidate_data = candidate.model_dump()
-    source_key = {
-        "entityDcid": source.source_metadata.get("entityDcid"),
-        "variables": source.source_metadata.get("variables"),
-        "facetId": source.facet_id,
-        "observedDate": source.time_period,
-    }
+    source_dedupe_key = source.source_metadata.get("dedupeKey")
+    source_key = (
+        {"providerKey": source_dedupe_key}
+        if source_dedupe_key
+        else {
+            "entityDcid": source.source_metadata.get("entityDcid"),
+            "variables": source.source_metadata.get("variables"),
+            "facetId": source.facet_id,
+            "observedDate": source.time_period,
+        }
+    )
     with connection.transaction():
         with connection.cursor() as cursor:
             cursor.execute("SELECT source_metadata_json FROM puzzle_candidates")
             for existing in cursor.fetchall():
                 existing_metadata = existing["source_metadata_json"] or {}
-                existing_key = {
-                    "entityDcid": existing_metadata.get("entityDcid"),
-                    "variables": existing_metadata.get("variables"),
-                    "facetId": existing_metadata.get("facetId"),
-                    "observedDate": existing_metadata.get("observedDate"),
-                }
+                existing_key = (
+                    {"providerKey": existing_metadata.get("dedupeKey")}
+                    if existing_metadata.get("dedupeKey")
+                    else {
+                        "entityDcid": existing_metadata.get("entityDcid"),
+                        "variables": existing_metadata.get("variables"),
+                        "facetId": existing_metadata.get("facetId"),
+                        "observedDate": existing_metadata.get("observedDate"),
+                    }
+                )
                 if existing_key == source_key:
-                    raise ValueError("Duplicate candidate: this Data Commons dataset, variables, facet, and date already exist")
+                    raise ValueError("Duplicate candidate: this source dataset, selection, geography, and date already exist")
             cursor.execute(
                 """
                 INSERT INTO puzzle_candidates (

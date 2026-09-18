@@ -5,6 +5,12 @@ import { spawnSync } from 'node:child_process';
 const root = resolve(import.meta.dirname, '..');
 const args = process.argv.slice(2);
 
+if (args.includes('--help') || args.includes('-h')) {
+  console.log('Usage: npm run candidates -- --count <number> [--source all|datacommons|owid|eurostat] [--timeout-seconds <seconds>]');
+  console.log('Creates and AI-vets the requested number of candidates in the local database.');
+  process.exit(0);
+}
+
 function option(name, fallback) {
   const inline = args.find(argument => argument.startsWith(`${name}=`));
   if (inline) return inline.slice(name.length + 1);
@@ -17,7 +23,8 @@ function option(name, fallback) {
 const positionalCount = args.find(argument => /^\d+$/.test(argument));
 const count = Number(option('--count', positionalCount || '1'));
 const timeoutSeconds = Number(option('--timeout-seconds', '300'));
-const suppliedConfigDir = args.includes('--config-dir');
+const source = option('--source', 'all');
+const suppliedConfigDir = args.some(argument => argument === '--config-dir' || argument.startsWith('--config-dir='));
 const configDir = resolve(root, option('--config-dir', 'data_pipeline/examples'));
 
 if (!Number.isInteger(count) || count < 1) {
@@ -26,6 +33,10 @@ if (!Number.isInteger(count) || count < 1) {
 }
 if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1) {
   console.error('--timeout-seconds must be a positive integer');
+  process.exit(1);
+}
+if (!['all', 'datacommons', 'owid', 'eurostat'].includes(source)) {
+  console.error('--source must be all, datacommons, owid, or eurostat');
   process.exit(1);
 }
 
@@ -76,6 +87,7 @@ function runCapture(command, commandArgs) {
 console.log('Starting local Postgres...');
 console.log(`Candidate target: ${count}`);
 console.log(`Pipeline timeout: ${timeoutSeconds} seconds`);
+console.log(`Source providers: ${source}`);
 run('docker', ['compose', 'up', '-d', 'postgres']);
 
 let migrated = false;
@@ -144,7 +156,7 @@ async function processConfigs(activeConfigDir) {
 if (suppliedConfigDir) {
   await processConfigs(configDir);
 } else {
-  run('python', ['-u', '-m', 'data_pipeline.commands.produce', '--count', String(count)]);
+  run('python', ['-u', '-m', 'data_pipeline.commands.produce', '--count', String(count), '--source', source]);
   accepted = count;
 }
 
