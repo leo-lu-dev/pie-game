@@ -30,6 +30,8 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
+.generated-candidates/
+.discovery-state.json
 .idea/
 .vscode/*
 !.vscode/extensions.json

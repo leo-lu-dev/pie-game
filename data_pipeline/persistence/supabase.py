@@ -47,8 +47,25 @@ def persist_candidate(candidate: CandidatePuzzle, source: SourceDataset, validat
     status = "validated" if validation.valid else "ingested"
     diagnostics = validation.diagnostics.__dict__ if validation.diagnostics else None
     candidate_data = candidate.model_dump()
+    source_key = {
+        "entityDcid": source.source_metadata.get("entityDcid"),
+        "variables": source.source_metadata.get("variables"),
+        "facetId": source.facet_id,
+        "observedDate": source.time_period,
+    }
     with connection.transaction():
         with connection.cursor() as cursor:
+            cursor.execute("SELECT source_metadata_json FROM puzzle_candidates")
+            for existing in cursor.fetchall():
+                existing_metadata = existing["source_metadata_json"] or {}
+                existing_key = {
+                    "entityDcid": existing_metadata.get("entityDcid"),
+                    "variables": existing_metadata.get("variables"),
+                    "facetId": existing_metadata.get("facetId"),
+                    "observedDate": existing_metadata.get("observedDate"),
+                }
+                if existing_key == source_key:
+                    raise ValueError("Duplicate candidate: this Data Commons dataset, variables, facet, and date already exist")
             cursor.execute(
                 """
                 INSERT INTO puzzle_candidates (
@@ -86,7 +103,31 @@ def persist_agent_review(candidate_id: str, review: AgentReview, model: str, pro
                 "INSERT INTO candidate_agent_reviews (id, candidate_id, model, prompt_version, verdict, review_json) VALUES (%s, %s, %s, %s, %s, %s)",
                 (review_id, candidate_id, model, prompt_version, review.verdict, _json(review.model_dump())),
             )
-            cursor.execute("UPDATE puzzle_candidates SET status = 'agent_reviewed', updated_at = now() WHERE id = %s AND status <> 'promoted'", (candidate_id,))
+            status = {'approve': 'agent_reviewed', 'review': 'needs_review', 'reject': 'rejected'}[review.verdict]
+            cursor.execute("UPDATE puzzle_candidates SET status = %s, updated_at = now() WHERE id = %s AND status <> 'promoted'", (status, candidate_id))
+            ai_gate_passed = (
+                review.verdict == 'approve'
+                and review.recommended_action == 'approve'
+                and review.semantic_validity
+                and review.denominator_clear
+                and review.question_accurate
+            )
+            suggestions = review.suggested_category_labels
+            if ai_gate_passed and suggestions:
+                cursor.execute("SELECT category_key FROM candidate_categories WHERE candidate_id = %s", (candidate_id,))
+                category_ids = {row['category_key'] for row in cursor.fetchall()}
+                labels = {category_id: label.strip() for category_id, label in suggestions.items() if isinstance(label, str)}
+                valid_labels = (
+                    set(labels) == category_ids
+                    and all(labels.values())
+                    and len({label.casefold() for label in labels.values()}) == len(labels)
+                    and ("other" not in labels or labels["other"] == "Other")
+                )
+                if valid_labels:
+                    cursor.executemany(
+                        "UPDATE candidate_categories SET label = %s WHERE candidate_id = %s AND category_key = %s",
+                        [(label, candidate_id, category_id) for category_id, label in labels.items()],
+                    )
     return review_id
 
 

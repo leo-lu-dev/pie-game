@@ -21,5 +21,5 @@ class AgentReview(BaseModel):
     issues: list[str] = Field(default_factory=list)
     suggested_title: str | None = None
     suggested_context: str | None = None
+    suggested_category_labels: dict[str, str] | None = None
     recommended_action: Literal["approve", "human_review", "reject"]
-

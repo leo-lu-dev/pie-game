@@ -14,8 +14,8 @@ class DataCommonsError(RuntimeError):
 class DataCommonsAdapter:
     """Fetch one explicitly configured Data Commons observation dataset.
 
-    The caller supplies five statistical variables that describe one comparable
-    universe. The adapter does not discover or invent variables.
+    The caller supplies at least five statistical variables that describe one
+    comparable universe. The adapter does not discover or invent variables.
     """
 
     def __init__(
@@ -35,13 +35,13 @@ class DataCommonsAdapter:
         base_url: str = "https://api.datacommons.org/v2",
         client: httpx.Client | None = None,
     ) -> None:
-        if len(variables) != 5:
-            raise ValueError("Data Commons adapter requires exactly five variables")
+        if len(variables) < 5:
+            raise ValueError("Data Commons adapter requires at least five variables")
         self.entity_dcid = entity_dcid
         self.variables = variables
         self.labels = labels or {category_id: category_id for category_id in variables}
         if set(self.labels) != set(variables):
-            raise ValueError("labels must match the five variable category IDs")
+            raise ValueError("labels must match the variable category IDs")
         self.dataset_id = dataset_id
         self.measure = measure
         self.unit = unit
@@ -132,7 +132,7 @@ class DataCommonsAdapter:
         if self.facet_id:
             common = {(facet, date) for facet, date in common if facet == self.facet_id}
         if not common:
-            raise DataCommonsError("The five variables do not share a common facet and date")
+            raise DataCommonsError("The variables do not share a common facet and date")
         facet_ids = {facet for facet, _ in common}
         if len(facet_ids) != 1:
             raise DataCommonsError("Multiple common facets found; specify facet_id explicitly")

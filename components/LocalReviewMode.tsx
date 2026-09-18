@@ -50,7 +50,12 @@ export default function LocalReviewMode() {
       const response = await fetch('/api/local-review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: item.kind, id: item.id, decision: nextDecision }) });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error || 'Could not save decision');
-      setItems(current => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, status: nextDecision, humanStatus: nextDecision } : entry));
+      if (nextDecision === 'rejected') {
+        setItems(current => current.filter(entry => entry.id !== item.id));
+        setIndex(current => Math.max(0, Math.min(current, items.length - 2)));
+      } else {
+        setItems(current => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, status: nextDecision, humanStatus: nextDecision } : entry));
+      }
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not save decision'); }
     finally { setSaving(false); }
   }

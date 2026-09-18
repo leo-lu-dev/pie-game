@@ -10,7 +10,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx db/seed.ts"
+    "db:seed": "tsx db/seed.ts",
+    "candidates": "node scripts/create-candidates.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

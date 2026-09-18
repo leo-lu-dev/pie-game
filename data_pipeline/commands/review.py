@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import date, datetime
 from typing import Any
 
 from ..agents.critic import AgentCriticError, review_candidate
-from ..agents.gemini import GeminiCriticTransport
+from ..agents.factory import critic_transport_from_env
 from ..agents.prompts import PROMPT_VERSION
 from ..persistence.supabase import mark_candidate_needs_review, persist_agent_review
 from ..persistence.supabase import connect
-from ..review_workflow import candidate_detail, candidate_from_detail, list_candidates, promote_candidate, record_decision
+from ..review_workflow import candidate_detail, candidate_from_detail, existing_candidate_summaries, list_candidates, promote_candidate, record_decision
 from ..validation import CandidateDiagnostics
 
 
@@ -52,11 +53,12 @@ def main() -> None:
             validation = detail['validations'][0] if detail['validations'] else None
             diagnostics = CandidateDiagnostics(**validation['diagnostics_json']) if validation and validation['diagnostics_json'] else None
             try:
-                with GeminiCriticTransport.from_env(args.model) as transport:
-                    review = review_candidate(candidate, diagnostics, transport)
-            except (AgentCriticError, RuntimeError):
+                with critic_transport_from_env(args.model) as transport:
+                    review = review_candidate(candidate, diagnostics, transport, existing_candidate_summaries(connection, args.candidate_id))
+            except (AgentCriticError, RuntimeError) as error:
                 mark_candidate_needs_review(args.candidate_id, connection)
-                raise
+                print(f'AI review failed: {error}', file=sys.stderr)
+                raise SystemExit(1)
             review_id = persist_agent_review(args.candidate_id, review, transport.model, PROMPT_VERSION, connection)
             print(json.dumps({'reviewId': review_id, 'model': transport.model, 'review': review.model_dump()}, indent=2))
         else:

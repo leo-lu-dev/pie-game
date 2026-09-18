@@ -35,6 +35,15 @@ def candidate_detail(connection: psycopg.Connection[Any], candidate_id: str) -> 
     return {'candidate': candidate, 'categories': categories, 'validations': validations, 'reviews': reviews}
 
 
+def existing_candidate_summaries(connection: psycopg.Connection[Any], exclude_id: str | None = None) -> list[dict[str, Any]]:
+    with connection.cursor() as cursor:
+        if exclude_id:
+            cursor.execute('SELECT id, title, context, topic, geography, time_period FROM puzzle_candidates WHERE id <> %s ORDER BY created_at DESC LIMIT 20', (exclude_id,))
+        else:
+            cursor.execute('SELECT id, title, context, topic, geography, time_period FROM puzzle_candidates ORDER BY created_at DESC LIMIT 20')
+        return list(cursor.fetchall())
+
+
 def candidate_from_detail(detail: dict[str, Any]) -> CandidatePuzzle:
     """Reconstruct the review model from the persisted candidate records."""
     candidate = detail['candidate']

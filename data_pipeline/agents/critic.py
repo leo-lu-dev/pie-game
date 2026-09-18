@@ -32,7 +32,6 @@ def parse_review(response_text: str) -> AgentReview:
         raise AgentCriticError("critic returned invalid structured JSON") from error
 
 
-def review_candidate(candidate: CandidatePuzzle, diagnostics: CandidateDiagnostics | None, transport: CriticTransport) -> AgentReview:
-    response = transport.complete(system_prompt=SYSTEM_PROMPT, user_prompt=build_review_prompt(candidate, diagnostics))
+def review_candidate(candidate: CandidatePuzzle, diagnostics: CandidateDiagnostics | None, transport: CriticTransport, existing_candidates: list[dict] | None = None) -> AgentReview:
+    response = transport.complete(system_prompt=SYSTEM_PROMPT, user_prompt=build_review_prompt(candidate, diagnostics, existing_candidates))
     return parse_review(response)
-

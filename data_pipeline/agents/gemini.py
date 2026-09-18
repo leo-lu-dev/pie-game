@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+import re
+import sys
+import time
 from typing import Any
 
 import httpx
@@ -27,6 +30,9 @@ class GeminiCriticTransport(CriticTransport):
             raise ValueError("Gemini model is required")
         self.api_key = api_key
         self.model = model
+        self.response_schema = AgentReview.model_json_schema()
+        self.minimum_interval = float(os.getenv("GEMINI_MIN_INTERVAL_SECONDS", "5"))
+        self._last_request_at = 0.0
         self._client = client or httpx.Client(timeout=60.0)
         self._owns_client = client is None
 
@@ -45,20 +51,66 @@ class GeminiCriticTransport(CriticTransport):
             "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
             "generationConfig": {
                 "responseMimeType": "application/json",
-                "responseJsonSchema": AgentReview.model_json_schema(),
+                "responseJsonSchema": self.response_schema,
                 "temperature": 0.1,
+                "maxOutputTokens": 1000,
             },
         }
-        try:
-            response = self._client.post(
-                url,
-                headers={"x-goog-api-key": self.api_key},
-                json=payload,
-            )
-            response.raise_for_status()
-            body = response.json()
-        except (httpx.HTTPError, ValueError) as error:
-            raise AgentCriticError(f"Gemini request failed for model {self.model}") from error
+        last_error: Exception | None = None
+        for attempt in range(1, 5):
+            try:
+                wait = self.minimum_interval - (time.monotonic() - self._last_request_at)
+                if wait > 0:
+                    time.sleep(wait)
+                self._last_request_at = time.monotonic()
+                response = self._client.post(
+                    url,
+                    headers={"x-goog-api-key": self.api_key},
+                    json=payload,
+                )
+                response.raise_for_status()
+                body = response.json()
+                break
+            except httpx.HTTPStatusError as error:
+                last_error = error
+                if error.response.status_code not in (429, 500, 502, 503, 504) or attempt == 4:
+                    detail = error.response.text[:500].replace("\n", " ")
+                    raise AgentCriticError(f"Gemini request failed with HTTP {error.response.status_code}: {detail}") from error
+                detail = error.response.text.lower()
+                retry_after_header = error.response.headers.get("retry-after")
+                # A project/day quota cannot be fixed by retrying. The generic
+                # free-tier metric also covers per-minute limits, so only stop
+                # immediately when the response identifies a day-long limit.
+                daily_quota = any(marker in detail for marker in (
+                    "generaterequestsperday",
+                    "generatetokensperday",
+                    "requests per day",
+                    "tokens per day",
+                    "per_day",
+                    "perday",
+                    "daily quota",
+                ))
+                if daily_quota:
+                    raise AgentCriticError("Gemini daily quota is exhausted; retrying will not help until the quota resets") from error
+                retry_after = retry_after_header
+                retry_message = re.search(r"retry in\s+([\d.]+)s", detail)
+                if not retry_after and retry_message:
+                    retry_after = retry_message.group(1)
+                try:
+                    delay = max(5, float(retry_after)) if retry_after else 5 * (2 ** (attempt - 1))
+                except ValueError:
+                    delay = 5 * (2 ** (attempt - 1))
+                if delay > 60:
+                    raise AgentCriticError(f"Gemini requested a retry after {delay:.0f}s; stopping to avoid a long blocked run") from error
+                print(f"Gemini temporary HTTP {error.response.status_code}; retrying in {delay}s ({attempt}/3)", file=sys.stderr, flush=True)
+                time.sleep(delay)
+            except (httpx.HTTPError, ValueError) as error:
+                last_error = error
+                if attempt == 4:
+                    raise AgentCriticError(f"Gemini request failed for model {self.model}") from error
+                time.sleep(2 ** (attempt - 1))
+        else:
+            raise AgentCriticError(f"Gemini request failed for model {self.model}") from last_error
 
         try:
             parts = body["candidates"][0]["content"]["parts"]

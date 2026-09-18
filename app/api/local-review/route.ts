@@ -1,4 +1,4 @@
-import { asc, desc, eq } from 'drizzle-orm';
+import { asc, desc, eq, or } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../db/client';
 import { candidateAgentReviews, candidateCategories, candidateValidations, puzzleCandidates } from '../../../db/schema';
@@ -18,7 +18,12 @@ export async function GET() {
   let storageWarning: string | null = null;
   try {
     [candidates, categories, reviews] = await Promise.all([
-      db.select().from(puzzleCandidates).orderBy(asc(puzzleCandidates.createdAt)),
+      db.select().from(puzzleCandidates).where(
+        // Only candidates with an AI-approved status are considered here. The
+        // full acceptance gate is applied below using the saved review JSON.
+        // Human-approved candidates remain visible until they are promoted.
+        or(eq(puzzleCandidates.status, 'agent_reviewed'), eq(puzzleCandidates.status, 'approved')),
+      ).orderBy(asc(puzzleCandidates.createdAt)),
       db.select().from(candidateCategories).orderBy(asc(candidateCategories.displayOrder)),
       db.select().from(candidateAgentReviews).orderBy(desc(candidateAgentReviews.createdAt)),
     ]);
@@ -34,7 +39,16 @@ export async function GET() {
   const latestReviewByCandidate = new Map<string, typeof reviews[number]>();
   reviews.forEach(review => { if (!latestReviewByCandidate.has(review.candidateId)) latestReviewByCandidate.set(review.candidateId, review); });
 
-  const candidateItems = candidates.map(candidate => {
+  const candidateItems = candidates.filter(candidate => {
+    if (candidate.status === 'approved') return true;
+    const review = latestReviewByCandidate.get(candidate.id)?.reviewJson as Record<string, unknown> | undefined;
+    return candidate.status === 'agent_reviewed'
+      && review?.verdict === 'approve'
+      && review?.recommended_action === 'approve'
+      && review?.semantic_validity === true
+      && review?.denominator_clear === true
+      && review?.question_accurate === true;
+  }).map(candidate => {
     const candidateCategories = [...(categoriesByCandidate.get(candidate.id) || [])].sort((a, b) => Number(b.rawValue) - Number(a.rawValue) || a.displayOrder - b.displayOrder);
     const puzzle = {
       id: candidate.id,
