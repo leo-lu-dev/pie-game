@@ -16,6 +16,23 @@ type ReviewItem = {
   answer: string[];
 };
 
+const ghostPuzzle: PublicPuzzle = {
+  id: 'ghost-preview',
+  title: 'Sample topic distribution',
+  context: 'Ghost board preview for checking the local game interface.',
+  maxAttempts: 4,
+  categories: ['Whatever', 'Something else', 'Another thing', 'The other thing', 'Etcetera']
+    .map((label, index) => ({ id: `ghost-${index}`, label })),
+  slices: [
+    { id: 'ghost-slice-0', value: 31 },
+    { id: 'ghost-slice-1', value: 24 },
+    { id: 'ghost-slice-2', value: 19 },
+    { id: 'ghost-slice-3', value: 15 },
+    { id: 'ghost-slice-4', value: 11 },
+  ],
+};
+const ghostAnswer = ghostPuzzle.categories.map(category => category.id);
+
 export default function LocalReviewMode() {
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [index, setIndex] = useState(0);
@@ -62,11 +79,11 @@ export default function LocalReviewMode() {
 
   if (loading) return <main className="mx-auto max-w-xl px-6 py-20 text-center text-sm font-bold text-[#61706a]">Loading local review queue…</main>;
   if (error) return <main className="mx-auto max-w-xl px-6 py-20 text-center"><h1 className="text-2xl font-black">Local review unavailable</h1><p className="mt-3 text-[#61706a]">{error}</p><p className="mt-5 text-sm text-[#61706a]">Check that DATABASE_URL points to your local database and that migrations have been applied.</p></main>;
-  if (!item) return <main className="mx-auto max-w-xl px-6 py-20 text-center"><h1 className="text-2xl font-black">No local candidates</h1><p className="mt-3 text-[#61706a]">Run the local ingestion pipeline to add a candidate for review.</p></main>;
+  if (!item) return <div className="ghost-preview min-h-screen bg-[#f8f4ec] px-3 py-4 sm:px-8"><p className="mx-auto mb-4 max-w-[1440px] rounded-full bg-[#fff8dc] px-4 py-2 text-center text-xs font-bold uppercase tracking-widest text-[#806b28]">Ghost board preview · no candidates awaiting review</p><Game localPuzzle={ghostPuzzle} localAnswer={ghostAnswer} /></div>;
 
   return <main className="min-h-screen bg-[#f8f4ec] px-3 py-4 sm:px-8">
     <header className="mx-auto mb-5 flex max-w-[1440px] items-center justify-between gap-4">
-      <a href="/" className="text-xl font-black tracking-tight">pie<span className="text-[#f06d3c]">.</span>of the day</a>
+      <a href="/" className="text-xl font-black tracking-tight">Split Decision</a>
       <div className="rounded-full bg-[#17221f] px-4 py-2 text-xs font-bold uppercase tracking-widest text-white">Local review · {progressLabel}</div>
     </header>
     <section className="mx-auto mb-4 flex max-w-[1440px] flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#dce4de] bg-white/70 p-3">

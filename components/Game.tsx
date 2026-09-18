@@ -11,6 +11,11 @@ import { shareText } from '../lib/sharing';
 
 type Props = { puzzleKey?: string; localPuzzle?: PublicPuzzle; localAnswer?: string[] };
 
+function displayPuzzleDate(date: string | undefined) {
+  if (!date) return undefined;
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
+}
+
 export default function Game({ puzzleKey, localPuzzle, localAnswer }: Props) {
   const [puzzle, setPuzzle] = useState<PublicPuzzle | null>(null);
   const [mapping, setMapping] = useState<(string | null)[]>(Array(5).fill(null));
@@ -63,13 +68,14 @@ export default function Game({ puzzleKey, localPuzzle, localAnswer }: Props) {
   }, [localPuzzle, puzzleKey]);
 
   if (error) return <main className="mx-auto max-w-xl px-6 py-20 text-center"><h1 className="text-2xl font-black">Could not load puzzle</h1><p className="mt-3 text-[#61706a]">{error}</p></main>;
-  if (!puzzle) return <main className="mx-auto max-w-xl px-6 py-20 text-center text-sm font-bold text-[#61706a]">Loading today&apos;s pie…</main>;
+  if (!puzzle) return <main className="mx-auto max-w-xl px-6 py-20 text-center text-sm font-bold text-[#61706a]">Loading today&apos;s puzzle…</main>;
 
   const values = normalizeValues(puzzle.slices.map(slice => slice.value));
   const complete = mapping.every(Boolean) && new Set(mapping).size === 5;
   const pool = puzzle.categories.filter(category => !mapping.includes(category.id));
   const labelFor = (id: string | null) => puzzle.categories.find(category => category.id === id)?.label;
   const puzzleUrl = `/api/puzzles/${encodeURIComponent(puzzle.id)}`;
+  const puzzleDate = displayPuzzleDate(puzzle.publishDate);
   const distributionMax = Math.max(1, ...Object.values(statistics?.guessDistribution || {}));
 
   function canMove(id: string) { const source = mapping.indexOf(id); return source < 0 || !locked[source]; }
@@ -122,13 +128,13 @@ export default function Game({ puzzleKey, localPuzzle, localAnswer }: Props) {
     setCopied(true); window.setTimeout(() => setCopied(false), 1800);
   }
 
-  return <main className="mx-auto min-h-screen max-w-[1440px] px-3 py-4 sm:px-8">
-    <header className="mb-4 flex items-center justify-between"><a href="/" className="text-xl font-black tracking-tight">pie<span className="text-[#f06d3c]">.</span>of the day</a><div className="rounded-full bg-[#17221f] px-4 py-2 text-xs font-bold uppercase tracking-widest text-white">{puzzle.id}</div></header>
-    <section className="text-center"><h1 className="text-lg font-bold leading-snug sm:text-2xl">{puzzle.title}</h1><p className="mt-2 text-sm text-[#61706a]">Match each label to a slice. Drag to place or click two items to swap.</p></section>
+  return <main className="game-page mx-auto min-h-screen max-w-[1440px] px-3 py-2 sm:px-8 sm:py-4">
+    <header className="mb-2 flex items-center justify-between sm:mb-4"><a href="/" className="text-lg font-black tracking-tight sm:text-xl">Split Decision</a><div className="rounded-full bg-[#17221f] px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white sm:px-4 sm:py-2 sm:text-xs">{puzzleDate || 'Preview'}</div></header>
+    <section className="text-center"><h1 className="text-base font-bold leading-snug sm:text-2xl">{puzzle.title}</h1><p className="mt-1 text-xs text-[#61706a] sm:mt-2 sm:text-sm">Match each label to a slice. Drag to place or click two items to swap.</p></section>
     <section className={`game-area ${shaking ? 'animate-[shake_.42s_ease-in-out]' : ''}`}>
       <PieBoard values={values} mapping={mapping} locked={locked} selected={selected} disabled={shaking || result !== 'playing'} labelFor={labelFor} onClick={clickSlot} onDragStart={startDrag} onDrop={dropOnSlot} />
-      <div onDragOver={event => event.preventDefault()} onDrop={dropInPool} className="mt-4 min-h-28 border-t border-[#edf0ed] pt-6"><p className="mb-3 text-center text-xs font-bold uppercase tracking-widest text-[#8a9690]">{selected ? 'Choose another item to swap' : 'Drag labels to slices · drag back here to remove'}</p><div className="option-pool">{puzzle.categories.map(category => { const inPool = pool.some(item => item.id === category.id); return <button key={category.id} draggable={inPool && result === 'playing'} onDragStart={event => startDrag(event, category.id)} onClick={() => clickCategory(category.id)} disabled={!inPool || result !== 'playing'} className={`answer-card ${!inPool ? 'pointer-events-none invisible' : 'cursor-grab border-[#dce4de] bg-white hover:border-[#f06d3c] active:cursor-grabbing'} ${selected === category.id ? 'border-[#f06d3c] bg-[#fff0e9] text-[#c64c22]' : ''}`}>{category.label}</button>; })}</div></div>
-      <div className="mt-4 flex items-center justify-center gap-6"><span className="text-sm font-bold text-[#61706a]">{attempts} / {puzzle.maxAttempts} guesses</span><button onClick={submit} disabled={submitting || !complete || result !== 'playing'} className="rounded-full bg-[#f06d3c] px-6 py-3 text-sm font-black text-white shadow-lg shadow-[#f06d3c]/20 transition hover:bg-[#db5b2c] disabled:cursor-not-allowed disabled:bg-[#d8dfda] disabled:shadow-none">{submitting ? 'Checking…' : 'Submit guess'}</button></div>
+      <div onDragOver={event => event.preventDefault()} onDrop={dropInPool} className="mt-2 min-h-16 border-t border-[#edf0ed] pt-3 sm:mt-4 sm:min-h-28 sm:pt-6"><p className="mb-2 hidden text-center text-xs font-bold uppercase tracking-widest text-[#8a9690] sm:mb-3 sm:block">{selected ? 'Choose another item to swap' : 'Drag labels to slices · drag back here to remove'}</p><div className="option-pool">{puzzle.categories.map(category => { const inPool = pool.some(item => item.id === category.id); return <button key={category.id} draggable={inPool && result === 'playing'} onDragStart={event => startDrag(event, category.id)} onClick={() => clickCategory(category.id)} disabled={!inPool || result !== 'playing'} className={`answer-card ${!inPool ? 'pointer-events-none invisible' : 'cursor-grab border-[#dce4de] bg-white hover:border-[#f06d3c] active:cursor-grabbing'} ${selected === category.id ? 'border-[#f06d3c] bg-[#fff0e9] text-[#c64c22]' : ''}`}>{category.label}</button>; })}</div></div>
+      <div className="mt-2 flex items-center justify-center gap-3 sm:mt-4 sm:gap-6"><span className="text-xs font-bold text-[#61706a] sm:text-sm">{attempts} / {puzzle.maxAttempts} guesses</span><button onClick={submit} disabled={submitting || !complete || result !== 'playing'} className="rounded-full bg-[#f06d3c] px-4 py-2 text-xs font-black text-white shadow-lg shadow-[#f06d3c]/20 transition hover:bg-[#db5b2c] disabled:cursor-not-allowed disabled:bg-[#d8dfda] disabled:shadow-none sm:px-6 sm:py-3 sm:text-sm">{submitting ? 'Checking…' : 'Submit guess'}</button></div>
       {error && <p className="mt-4 text-center text-sm font-bold text-[#c64c22]">{error}</p>}
       {result !== 'playing' && !showResults && <div className="mt-6 text-center"><button onClick={() => setShowResults(true)} className="rounded-full bg-[#17221f] px-5 py-3 text-sm font-black text-white">View result</button></div>}
       {result !== 'playing' && showResults && (
@@ -192,6 +198,6 @@ export default function Game({ puzzleKey, localPuzzle, localAnswer }: Props) {
         </div>
       )}
     </section>
-    <footer className="mx-auto mt-4 flex max-w-4xl items-center justify-center text-xs text-[#8a9690]"><span>New puzzle every day</span></footer>
+    <footer className="mx-auto mt-2 flex max-w-4xl items-center justify-center text-[10px] text-[#8a9690] sm:mt-4 sm:text-xs"><span>New puzzle every day</span></footer>
   </main>;
 }

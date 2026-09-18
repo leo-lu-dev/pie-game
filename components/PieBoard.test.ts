@@ -11,9 +11,10 @@ function crosses(a: Point, b: Point, c: Point, d: Point) {
 
 describe('board layout across fixtures and viewport widths', () => {
   for (const width of [296, 351, 566, 600, 960, 1376]) {
+    for (const radiusLimit of width < 720 ? [140, 100, 70, 48] : [140]) {
     for (const puzzle of [...Object.values(fixtures), { id: 'sorted-candidate', slices: [131199078, 94480845, 29074059, 15250943, 4592038].map(value => ({ value })) }]) {
-      it(`${puzzle.id} at ${width}px keeps cards separate and connectors attached`, () => {
-        const g = boardGeometry(width, normalizeValues(puzzle.slices.map(slice => slice.value)));
+      it(`${puzzle.id} at ${width}px with radius limit ${radiusLimit} keeps cards separate and connectors attached`, () => {
+        const g = boardGeometry(width, normalizeValues(puzzle.slices.map(slice => slice.value)), radiusLimit);
         for (const card of g.cards) {
           expect(card.x).toBeGreaterThanOrEqual(0);
           expect(card.y).toBeGreaterThanOrEqual(0);
@@ -39,6 +40,7 @@ describe('board layout across fixtures and viewport widths', () => {
           }
         }
       });
+    }
     }
   }
 });

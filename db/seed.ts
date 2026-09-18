@@ -17,7 +17,7 @@ async function seed() {
         return order;
       }, {});
     const schedule = fixtureSchedule[fixture.id];
-    await db.insert(puzzles).values({ id: fixture.id, slug: fixture.id, title: fixture.title, context: fixture.context ?? null, maxAttempts: fixture.maxAttempts, status: schedule.status, publishDate: publishDate.toISOString().slice(0, 10), sourceName: 'Pie of the Day', sourceUrl: null, sourceMetadata: { fixture: true, fixtureId: fixture.id } }).onConflictDoUpdate({ target: puzzles.id, set: { title: fixture.title, maxAttempts: fixture.maxAttempts, publishDate: publishDate.toISOString().slice(0, 10), status: schedule.status, sourceMetadata: { fixture: true, fixtureId: fixture.id }, updatedAt: new Date() } });
+    await db.insert(puzzles).values({ id: fixture.id, slug: fixture.id, title: fixture.title, context: fixture.context ?? null, maxAttempts: fixture.maxAttempts, status: schedule.status, publishDate: publishDate.toISOString().slice(0, 10), sourceName: 'Split Decision', sourceUrl: null, sourceMetadata: { fixture: true, fixtureId: fixture.id } }).onConflictDoUpdate({ target: puzzles.id, set: { title: fixture.title, maxAttempts: fixture.maxAttempts, publishDate: publishDate.toISOString().slice(0, 10), status: schedule.status, sourceMetadata: { fixture: true, fixtureId: fixture.id }, updatedAt: new Date() } });
     await db.delete(puzzleCategories).where(eq(puzzleCategories.puzzleId, fixture.id));
     await db.insert(puzzleCategories).values(fixture.categories.map(category => {
       const originalSliceIndex = fixture.answer.indexOf(category.id);

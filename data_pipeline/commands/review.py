@@ -22,7 +22,7 @@ def json_default(value: Any) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description='Review StatPie candidates locally')
+    parser = argparse.ArgumentParser(description='Review Split Decision candidates locally')
     actions = parser.add_subparsers(dest='action', required=True)
     actions.add_parser('list')
     show = actions.add_parser('show')

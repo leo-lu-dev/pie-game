@@ -5,13 +5,13 @@ import { Cell, Pie, PieChart } from 'recharts';
 
 export const sliceColors = ['#f06d3c', '#f6b944', '#2f8994', '#7294d4', '#b57ab9'];
 
-export function boardGeometry(width: number, values: number[]) {
+export function boardGeometry(width: number, values: number[], radiusLimit = 140) {
   const compact = width < 720;
-  const cardWidth = compact ? Math.min(116, (width - 48) / 3) : 180;
-  const cardHeight = 88;
-  const clearance = compact ? 18 : 22;
+  const cardWidth = compact ? Math.min(132, (width - 16) / 3) : 180;
+  const cardHeight = compact ? 60 : 88;
+  const clearance = compact ? 10 : 22;
   const radius = compact
-    ? Math.min(width >= 450 ? (width - cardWidth * 2 - clearance * 2) / 2 : 210, (width - Math.max(56, cardWidth * .45)) / 2)
+    ? Math.min(radiusLimit, (width - 32) / 2)
     : Math.min(245, (width - cardWidth * 2 - clearance * 2) / 2);
   let height = compact
     ? cardHeight * 2 + radius * 2 + clearance * 2 + 24
@@ -30,12 +30,12 @@ export function boardGeometry(width: number, values: number[]) {
 
   if (compact) {
     const vertical = [...cards].sort((a, b) => a.ay - b.ay);
-    [vertical.slice(0, 3), vertical.slice(3)].forEach((group, row) => {
+    const rows = [vertical.slice(0, 3), vertical.slice(3)];
+    rows.forEach((group, row) => {
       group.sort((a, b) => a.ax - b.ax).forEach((card, index) => {
         card.x = group.length === 1 ? (width - cardWidth) / 2 : index * (width - cardWidth) / (group.length - 1);
-        // Stagger the middle card away from the pie so its horizontal lead
-        // stays clear of the neighboring diagonals on narrow screens.
-        card.y = row === 0 ? (group.length === 3 && index === 1 ? -cardHeight - 14 : 0) : height - cardHeight;
+        // A small stagger separates the leads without reserving a full card row.
+        card.y = row === 0 ? (group.length === 3 && index === 1 ? -20 : 0) : height - cardHeight;
         // Pick the card edge nearest the slice so compact-layout connectors fan
         // outward instead of crossing near the middle card.
         card.left = card.ax >= card.x + cardWidth / 2;
@@ -44,7 +44,15 @@ export function boardGeometry(width: number, values: number[]) {
         if ((elbow - card.ax) * rx + (card.y + cardHeight / 2 - card.ay) * ry <= 0 && Math.abs(ry) > .001) {
           card.y = card.ay + (radius - (elbow - card.ax) * rx) / ry - cardHeight / 2;
         }
+        card.y = row === 0
+          ? Math.min(card.y, cy - radius - clearance - cardHeight)
+          : Math.max(card.y, cy + radius + clearance);
       });
+    });
+    const [topRow, bottomRow] = rows;
+    bottomRow.forEach(card => {
+      const sameColumn = topRow.filter(other => Math.abs(other.x - card.x) < 1);
+      if (sameColumn.length) card.y = Math.max(card.y, ...sameColumn.map(other => other.y + cardHeight + 6));
     });
   } else {
     for (const left of [true, false]) {
@@ -113,22 +121,28 @@ type Props = {
 export default function PieBoard(props: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+  const [availableHeight, setAvailableHeight] = useState(0);
   useEffect(() => {
-    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    const observer = new ResizeObserver(([entry]) => {
+      setWidth(entry.contentRect.width);
+      setAvailableHeight(entry.contentRect.height);
+    });
     if (container.current) observer.observe(container.current);
     return () => observer.disconnect();
   }, []);
-  const geometry = boardGeometry(width || 1000, props.values);
+  let geometry = boardGeometry(width || 1000, props.values);
+  // Preserve label dimensions while spending the remaining vertical space on the pie.
+  if (geometry.compact && availableHeight > 0) {
+    for (let radius = geometry.radius - 2; geometry.height > availableHeight && radius >= 48; radius -= 2) {
+      geometry = boardGeometry(width, props.values, radius);
+    }
+  }
   return <div ref={container} className="pie-board" style={{ height: geometry.height }}>
     {width > 0 && <>
       <PieChart width={width} height={geometry.height} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
         <Pie data={props.values.map(value => ({ value }))} dataKey="value" cx={geometry.cx} cy={geometry.cy}
           innerRadius={geometry.radius * .46} outerRadius={geometry.radius} startAngle={90} endAngle={-270}
-          paddingAngle={0} stroke="var(--cream)" strokeWidth={3} isAnimationActive={false} labelLine={false}
-          label={({ midAngle, index }) => {
-            const angle = -midAngle * Math.PI / 180;
-            return <text x={geometry.cx + geometry.radius * .74 * Math.cos(angle)} y={geometry.cy + geometry.radius * .74 * Math.sin(angle)} textAnchor="middle" dominantBaseline="central" fill="#17221f" fontWeight={800} fontSize={width < 720 ? 14 : 18}>{Number(index) + 1}</text>;
-          }}>
+          paddingAngle={0} stroke="var(--cream)" strokeWidth={3} isAnimationActive={false}>
           {props.values.map((_, index) => <Cell key={index} fill={sliceColors[index]} />)}
         </Pie>
       </PieChart>
@@ -143,7 +157,6 @@ export default function PieBoard(props: Props) {
           onDragStart={event => id && props.onDragStart(event, id)} onClick={() => props.onClick(card.index)}
           onDragOver={event => { if (!locked && !props.disabled) event.preventDefault(); }} onDrop={event => props.onDrop(event, card.index)}
           aria-label={`Slice ${card.index + 1}${id ? `, ${props.labelFor(id)}` : ', empty'}`}>
-          <span className="card-caption">Slice {card.index + 1}{locked ? ' · ✓ Correct' : ''}</span>
           <span>{id ? props.labelFor(id) : 'Drop here'}</span>
         </button>;
       })}

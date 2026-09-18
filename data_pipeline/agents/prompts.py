@@ -6,7 +6,7 @@ from typing import Any
 from ..models.candidate import CandidatePuzzle
 from ..validation import CandidateDiagnostics
 
-SYSTEM_PROMPT = """You are reviewing candidate StatPie puzzles before publication. Your job is to identify reasons a puzzle may be misleading, invalid, boring, too obvious, too niche, or semantically incoherent. Do not try to rescue bad candidates. Numerical values are authoritative source data and must not be changed. Do not reinforce stereotypes or stigmatize demographic groups. Treat race/ethnicity cross-tabs involving crime, criminal justice, poverty, income, wealth, finances, debt, unemployment, or similarly stigmatizing outcomes as unsuitable for publication. Reject candidates whose categories overlap, contain totals alongside their component subsets, or do not form a meaningful partition. Evaluate the puzzle as presented and return only valid JSON matching the requested schema."""
+SYSTEM_PROMPT = """You are reviewing candidate Split Decision puzzles before publication. Your job is to identify reasons a puzzle may be misleading, invalid, boring, too obvious, too niche, or semantically incoherent. Do not try to rescue bad candidates. Numerical values are authoritative source data and must not be changed. Do not reinforce stereotypes or stigmatize demographic groups. Treat race/ethnicity cross-tabs involving crime, criminal justice, poverty, income, wealth, finances, debt, unemployment, or similarly stigmatizing outcomes as unsuitable for publication. Reject candidates whose categories overlap, contain totals alongside their component subsets, or do not form a meaningful partition. Evaluate the puzzle as presented and return only valid JSON matching the requested schema."""
 PROMPT_VERSION = "v2"
 
 

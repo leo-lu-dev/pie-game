@@ -29,5 +29,5 @@ export async function GET(request: NextRequest) {
   const saved = await db.select().from(guesses).where(eq(guesses.gameResultId, game.id)).orderBy(asc(guesses.attemptNumber));
   const terminal = game.solved || game.attemptCount >= puzzle.maxAttempts;
   const state = { attempts: game.attemptCount, solved: game.solved, guesses: saved.map(guess => ({ attempt: guess.attemptNumber, assignments: guess.assignmentsJson, correctPositions: guess.correctPositionsJson, correctCount: guess.correctCount })), ...(terminal ? { reveal: categories.map(category => category.id) } : {}) };
-  return NextResponse.json({ id: puzzle.slug, title: puzzle.title, context: puzzle.context ?? undefined, maxAttempts: puzzle.maxAttempts, categories: categories.map(category => ({ id: category.id, label: category.label })), slices: categories.map((category, index) => ({ id: `${puzzle.id}-slice-${index}`, value: Number(category.rawValue) })), state });
+  return NextResponse.json({ id: puzzle.slug, title: puzzle.title, context: puzzle.context ?? undefined, publishDate: puzzle.publishDate, maxAttempts: puzzle.maxAttempts, categories: categories.map(category => ({ id: category.id, label: category.label })), slices: categories.map((category, index) => ({ id: `${puzzle.id}-slice-${index}`, value: Number(category.rawValue) })), state });
 }

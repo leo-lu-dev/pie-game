@@ -1,2 +1,1 @@
-"""StatPie data ingestion and candidate verification pipeline."""
-
+"""Split Decision data ingestion and candidate verification pipeline."""
