@@ -25,7 +25,7 @@ export function boardGeometry(width: number, values: number[]) {
     accumulated += value;
     const ax = cx + radius * Math.cos(angle), ay = cy - radius * Math.sin(angle);
     const left = Math.cos(angle) < 0;
-    return { index, ax, ay, left, x: 0, y: 0, path: '', elbow: 0, edge: 0, outwardDot: 0 };
+    return { index, ax, ay, left, x: 0, y: 0, path: '', points: [] as [number, number][], outwardDot: 0 };
   });
 
   if (compact) {
@@ -80,14 +80,24 @@ export function boardGeometry(width: number, values: number[]) {
   height = Math.max(height + shift, ...cards.map(card => card.y + cardHeight + 8));
 
   cards.forEach(card => {
-    const edge = card.left ? card.x + cardWidth : card.x;
-    const elbow = edge + (card.left ? 12 : -12);
     const radialX = card.ax - cx;
     const radialY = card.ay - cy;
-    card.path = `M ${card.ax} ${card.ay} L ${elbow} ${card.y + cardHeight / 2} H ${edge}`;
-    card.elbow = elbow;
-    card.edge = edge;
-    card.outwardDot = (elbow - card.ax) * radialX + (card.y + cardHeight / 2 - card.ay) * radialY;
+    const edges = [
+      { x: card.x, y: card.y + cardHeight / 2, nx: -1, ny: 0 },
+      { x: card.x + cardWidth, y: card.y + cardHeight / 2, nx: 1, ny: 0 },
+      { x: card.x + cardWidth / 2, y: card.y, nx: 0, ny: -1 },
+      { x: card.x + cardWidth / 2, y: card.y + cardHeight, nx: 0, ny: 1 },
+    ];
+    const edge = edges.sort((a, b) => Math.hypot(a.x - card.ax, a.y - card.ay) - Math.hypot(b.x - card.ax, b.y - card.ay))[0];
+    // Overlap the 3px chart stroke so the connector reaches the colored rim.
+    card.points = [
+      [card.ax - radialX / radius * 2, card.ay - radialY / radius * 2],
+      [card.ax + radialX / radius * 10, card.ay + radialY / radius * 10],
+      [edge.x + edge.nx * 10, edge.y + edge.ny * 10],
+      [edge.x, edge.y],
+    ];
+    card.path = card.points.map(([x, y], index) => `${index ? 'L' : 'M'} ${x} ${y}`).join(' ');
+    card.outwardDot = (card.points[1][0] - card.ax) * radialX + (card.points[1][1] - card.ay) * radialY;
   });
   return { width, height, radius, cx, cy, cardWidth, cardHeight, clearance, compact, cards };
 }
