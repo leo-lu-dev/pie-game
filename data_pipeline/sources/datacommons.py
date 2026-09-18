@@ -67,7 +67,7 @@ class DataCommonsAdapter:
     def fetch(self) -> SourceDataset:
         payload = {
             "date": self.date,
-            "variable": {"dcids": list(self.variables)},
+            "variable": {"dcids": list(self.variables.values())},
             "entity": {"dcids": [self.entity_dcid]},
             "select": ["date", "entity", "variable", "value", "facet"],
         }

@@ -6,6 +6,8 @@ from data_pipeline.sources.datacommons import DataCommonsAdapter, DataCommonsErr
 
 
 def response_for(request: httpx.Request) -> httpx.Response:
+    request_payload = request.read()
+    assert b'"dcids":["var-1","var-2","var-3","var-4","var-5"]' in request_payload
     payload = {
         "byVariable": {
             f"var-{index}": {

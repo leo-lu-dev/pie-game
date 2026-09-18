@@ -12,6 +12,7 @@ class GeminiTransportTests(unittest.TestCase):
             self.assertEqual(request.headers['x-goog-api-key'], 'test-key')
             payload = request.read()
             self.assertIn(b'"responseMimeType":"application/json"', payload)
+            self.assertIn(b'"responseJsonSchema"', payload)
             return httpx.Response(
                 200,
                 json={'candidates': [{'content': {'parts': [{'text': '{"verdict":"review"}'}]}}]},

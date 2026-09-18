@@ -9,6 +9,7 @@ import httpx
 from dotenv import load_dotenv
 
 from .critic import AgentCriticError, CriticTransport
+from ..models.review import AgentReview
 
 
 class GeminiCriticTransport(CriticTransport):
@@ -44,6 +45,7 @@ class GeminiCriticTransport(CriticTransport):
             "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
             "generationConfig": {
                 "responseMimeType": "application/json",
+                "responseJsonSchema": AgentReview.model_json_schema(),
                 "temperature": 0.1,
             },
         }

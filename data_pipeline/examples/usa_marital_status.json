@@ -1,0 +1,21 @@
+{
+  "dataset_id": "usa-marital-status-15-plus",
+  "entity_dcid": "country/USA",
+  "geography": "United States",
+  "topic": "marital status",
+  "title": "How are U.S. people age 15+ distributed by marital status?",
+  "context": "Among people age 15 and older in the United States in 2024, how is the population divided by reported marital status?",
+  "denominator": "people age 15 and older in the United States",
+  "measure": "count",
+  "unit": "people",
+  "population_universe": "people age 15 and older",
+  "facet_id": "10169881228856630405",
+  "date": "LATEST",
+  "variables": [
+    {"id": "never-married", "label": "Never married", "dcid": "Count_Person_NeverMarried"},
+    {"id": "married-not-separated", "label": "Married, not separated", "dcid": "Count_Person_MarriedAndNotSeparated"},
+    {"id": "separated", "label": "Separated", "dcid": "Count_Person_Separated"},
+    {"id": "divorced", "label": "Divorced", "dcid": "Count_Person_Divorced"},
+    {"id": "widowed", "label": "Widowed", "dcid": "Count_Person_Widowed"}
+  ]
+}
