@@ -18,7 +18,7 @@ from ..validation import ValidationResult
 
 
 def database_url() -> str:
-    value = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL")
+    value = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
     if not value:
         raise RuntimeError("Set DATABASE_URL or POSTGRES_URL before using pipeline persistence")
     return value

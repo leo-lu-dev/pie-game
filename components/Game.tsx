@@ -9,9 +9,9 @@ import type { GuessResponse, PublicPuzzle, SavedGuess } from '../lib/types';
 import type { PlayerStatistics } from '../lib/types';
 import { shareText } from '../lib/sharing';
 
-type Props = { puzzleKey?: string; devOptions?: { fixture?: string; date?: string; state?: string } };
+type Props = { puzzleKey?: string; localPuzzle?: PublicPuzzle; localAnswer?: string[] };
 
-export default function Game({ puzzleKey, devOptions }: Props) {
+export default function Game({ puzzleKey, localPuzzle, localAnswer }: Props) {
   const [puzzle, setPuzzle] = useState<PublicPuzzle | null>(null);
   const [mapping, setMapping] = useState<(string | null)[]>(Array(5).fill(null));
   const [locked, setLocked] = useState<boolean[]>(Array(5).fill(false));
@@ -29,14 +29,13 @@ export default function Game({ puzzleKey, devOptions }: Props) {
   useEffect(() => {
     let cancelled = false;
     setPuzzle(null); setMapping(Array(5).fill(null)); setLocked(Array(5).fill(false)); setSelected(null); setAttempts(0); setResult('playing'); setError(null); setStatistics(null); setCopied(false); setSubmittedGuesses([]); setShowResults(true);
+    if (localPuzzle) {
+      setPuzzle(localPuzzle);
+      return () => { cancelled = true; };
+    }
     const endpoint = puzzleKey
       ? `/api/puzzles/${encodeURIComponent(puzzleKey)}`
-      : (() => {
-        const params = new URLSearchParams(Object.entries(devOptions || {}).filter((entry): entry is [string, string] => Boolean(entry[1])));
-        params.set('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone);
-        const query = params.toString();
-        return `/api/puzzle/today${query ? `?${query}` : ''}`;
-      })();
+      : `/api/puzzle/today?timezone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`;
     ensureAnonymousSession().then(() => fetch(endpoint)).then(async response => { if (!response.ok) throw new Error((await response.json()).error || 'Unable to load puzzle'); return response.json() as Promise<PublicPuzzle>; }).then(data => {
       if (cancelled) return;
       const state = data.state;
@@ -61,7 +60,7 @@ export default function Game({ puzzleKey, devOptions }: Props) {
       if (state?.solved || (state?.attempts || 0) >= data.maxAttempts) fetch('/api/stats').then(response => response.ok ? response.json() : null).then(data => { if (!cancelled && data) setStatistics(data.stats); });
     }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : 'Unable to load puzzle'); });
     return () => { cancelled = true; };
-  }, [puzzleKey]);
+  }, [localPuzzle, puzzleKey]);
 
   if (error) return <main className="mx-auto max-w-xl px-6 py-20 text-center"><h1 className="text-2xl font-black">Could not load puzzle</h1><p className="mt-3 text-[#61706a]">{error}</p></main>;
   if (!puzzle) return <main className="mx-auto max-w-xl px-6 py-20 text-center text-sm font-bold text-[#61706a]">Loading today&apos;s pie…</main>;
@@ -87,6 +86,27 @@ export default function Game({ puzzleKey, devOptions }: Props) {
   async function submit() {
     if (!complete || submitting || result !== 'playing') return;
     setSubmitting(true); setError(null);
+    if (localPuzzle) {
+      const answer = localAnswer || localPuzzle.categories.map(category => category.id);
+      const correctPositions = mapping.map((id, index) => id === answer[index]);
+      const correctCount = correctPositions.filter(Boolean).length;
+      const attempt = attempts + 1;
+      const solved = correctCount === answer.length;
+      const terminal = solved || attempt >= localPuzzle.maxAttempts;
+      setAttempts(attempt);
+      setSubmittedGuesses(current => [...current, { attempt, assignments: mapping as string[], correctPositions, correctCount }]);
+      setLocked(current => current.map((value, index) => value || correctPositions[index]));
+      if (terminal) {
+        setMapping(solved ? mapping as string[] : answer);
+        setResult(solved ? 'won' : 'lost');
+        setShowResults(true);
+      } else {
+        setShaking(true);
+        window.setTimeout(() => { setShaking(false); setMapping(current => current.map((value, index) => correctPositions[index] ? value : null)); setSelected(null); }, 420);
+      }
+      setSubmitting(false);
+      return;
+    }
     try {
       const response = await fetch(`${puzzleUrl}/guess`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assignments: mapping }) });
       const data = await response.json() as GuessResponse & { error?: string };
