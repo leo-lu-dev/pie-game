@@ -58,16 +58,29 @@ export function boardGeometry(width: number, values: number[]) {
     let elbow = edge + (card.left ? 12 : -12);
     const radialX = card.ax - cx;
     const radialY = card.ay - cy;
-    const deltaY = card.y + cardHeight / 2 - card.ay;
-    const minimumOutwardDot = Math.max(1, radius * .5);
-    const outwardDot = (elbow - card.ax) * radialX + deltaY * radialY;
-    if (outwardDot < minimumOutwardDot && Math.abs(radialX) > .001) {
-      elbow += Math.sign(radialX) * (minimumOutwardDot - outwardDot) / Math.abs(radialX);
+    // Leave the slice along its radius. Route outside the circle before
+    // approaching the card; moving an elbow behind a card makes it double back.
+    const outerRadius = radius + clearance / 2;
+    const ox = cx + radialX / radius * outerRadius;
+    const oy = cy + radialY / radius * outerRadius;
+    if (compact) {
+      const top = card.y < cy;
+      const targetY = top ? card.y + cardHeight : card.y;
+      const targetX = card.x + cardWidth / 2;
+      const laneY = targetY + (top ? 12 : -12);
+      const angle = Math.atan2(radialY, radialX);
+      const targetAngle = Math.atan2(laneY - cy, targetX - cx);
+      const delta = Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle));
+      card.path = `M ${card.ax} ${card.ay} L ${ox} ${oy} A ${outerRadius} ${outerRadius} 0 0 ${delta > 0 ? 1 : 0} ${cx + outerRadius * Math.cos(targetAngle)} ${cy + outerRadius * Math.sin(targetAngle)} L ${targetX} ${laneY} V ${targetY}`;
+    } else {
+      const angle = Math.atan2(radialY, radialX);
+      const targetAngle = Math.atan2(card.y + cardHeight / 2 - cy, elbow - cx);
+      const delta = Math.atan2(Math.sin(targetAngle - angle), Math.cos(targetAngle - angle));
+      card.path = `M ${card.ax} ${card.ay} L ${ox} ${oy} A ${outerRadius} ${outerRadius} 0 0 ${delta > 0 ? 1 : 0} ${cx + outerRadius * Math.cos(targetAngle)} ${cy + outerRadius * Math.sin(targetAngle)} L ${elbow} ${card.y + cardHeight / 2} H ${edge}`;
     }
-    card.path = `M ${card.ax} ${card.ay} L ${elbow} ${card.y + cardHeight / 2} H ${edge}`;
     card.elbow = elbow;
     card.edge = edge;
-    card.outwardDot = (elbow - card.ax) * radialX + deltaY * radialY;
+    card.outwardDot = (ox - card.ax) * radialX + (oy - card.ay) * radialY;
   });
   return { width, height, radius, cx, cy, cardWidth, cardHeight, clearance, compact, cards };
 }
