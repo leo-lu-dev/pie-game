@@ -26,6 +26,10 @@ pnpm-debug.log*
 # OS/editor files
 .DS_Store
 Thumbs.db
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
 .idea/
 .vscode/*
 !.vscode/extensions.json

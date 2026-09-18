@@ -16,7 +16,7 @@ class CandidateDiagnostics:
     value_range: float
     adjacent_sorted_gaps: list[float]
     near_equal_value_count: int
-    dominance_ratio: float
+    dominance_ratio: float | None
 
 
 @dataclass(frozen=True)
@@ -48,7 +48,7 @@ def diagnostics_for(values: list[float], near_equal_tolerance: float = 1.0) -> C
         value_range=largest - smallest,
         adjacent_sorted_gaps=gaps,
         near_equal_value_count=near_equal_count,
-        dominance_ratio=largest / smallest if smallest else float("inf"),
+        dominance_ratio=largest / smallest if smallest else None,
     )
 
 
@@ -99,6 +99,8 @@ def validate_candidate_against_source(candidate: CandidatePuzzle, source: Source
             issues.append(f"source and candidate {name} do not match")
     if candidate.source_dataset_id != source.source_dataset_id:
         issues.append("candidate source dataset ID does not match source dataset")
+    if candidate.source_name != source.source_name:
+        issues.append("candidate source name does not match source dataset")
 
     metadata = candidate.transformation_metadata
     transformation = candidate.transformation_type
@@ -108,6 +110,10 @@ def validate_candidate_against_source(candidate: CandidatePuzzle, source: Source
             issues.append("subset metadata must list candidate categories in order")
         if not isinstance(selected, list) or any(category_id not in source_ids for category_id in selected):
             issues.append("subset contains an unknown source category")
+        for category in candidate.categories:
+            source_value = source_by_id.get(category.id)
+            if source_value and abs(category.raw_value - source_value.value) > max(1e-9, abs(source_value.value) * 1e-9):
+                issues.append(f"subset value changed for {category.id}")
     elif transformation == "four-plus-other":
         selected = metadata.get("selected")
         included = metadata.get("otherIncludes")
@@ -121,11 +127,23 @@ def validate_candidate_against_source(candidate: CandidatePuzzle, source: Source
             issues.append("Other does not equal the sum of its source categories")
         if set(category.id for category in candidate.categories if category.id != "other") != set(selected or []):
             issues.append("candidate categories do not match four-plus-other selection")
+        for category in candidate.categories:
+            if category.id != 'other':
+                source_value = source_by_id.get(category.id)
+                if source_value is None or abs(category.raw_value - source_value.value) > max(1e-9, abs(source_value.value) * 1e-9):
+                    issues.append(f"selected value changed for {category.id}")
     elif transformation in {"natural-five", "curated-five", "merged-categories"}:
         source_total = sum(value.value for value in source.values)
         candidate_total = sum(category.raw_value for category in candidate.categories)
         if abs(source_total - candidate_total) > max(1e-9, abs(source_total) * 1e-9):
             issues.append("transformation does not preserve the source total")
+        if transformation == "natural-five":
+            if candidate_ids != source_ids:
+                issues.append("natural-five categories must match the source categories")
+            for category in candidate.categories:
+                source_value = source_by_id.get(category.id)
+                if source_value and abs(category.raw_value - source_value.value) > max(1e-9, abs(source_value.value) * 1e-9):
+                    issues.append(f"natural-five value changed for {category.id}")
 
     final = validate_candidate(candidate)
     return ValidationResult(valid=not issues, issues=issues, diagnostics=final.diagnostics)

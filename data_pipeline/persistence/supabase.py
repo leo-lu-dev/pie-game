@@ -8,6 +8,8 @@ from typing import Any
 from uuid import uuid4
 
 import psycopg
+from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 from ..models.candidate import CandidatePuzzle
 from ..models.source import SourceDataset
@@ -16,7 +18,7 @@ from ..validation import ValidationResult
 
 
 def database_url() -> str:
-    value = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
+    value = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL")
     if not value:
         raise RuntimeError("Set DATABASE_URL or POSTGRES_URL before using pipeline persistence")
     return value
@@ -24,12 +26,15 @@ def database_url() -> str:
 
 @contextmanager
 def connect() -> Iterator[psycopg.Connection[Any]]:
-    with psycopg.connect(database_url()) as connection:
+    from dotenv import load_dotenv
+
+    load_dotenv('.env.local')
+    with psycopg.connect(database_url(), row_factory=dict_row) as connection:
         yield connection
 
 
-def _json(value: Any) -> str:
-    return json.dumps(value, default=str)
+def _json(value: Any) -> Jsonb:
+    return Jsonb(value, dumps=lambda item: json.dumps(item, default=str))
 
 
 def persist_candidate(candidate: CandidatePuzzle, source: SourceDataset, validation: ValidationResult, connection: psycopg.Connection[Any]) -> str:

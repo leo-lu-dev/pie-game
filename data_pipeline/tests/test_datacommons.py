@@ -40,6 +40,7 @@ class DataCommonsAdapterTests(unittest.TestCase):
         self.assertEqual([value.value for value in dataset.values], [10, 20, 30, 40, 50])
         self.assertEqual(dataset.facet_id, "facet-1")
         self.assertEqual(dataset.source_url, "https://example.test/source")
+        self.assertEqual(dataset.time_period, "2024")
         self.assertEqual(dataset.source_metadata["variables"]["category-1"], "var-1")
 
     def test_rejects_mixed_facets(self):
@@ -52,7 +53,16 @@ class DataCommonsAdapterTests(unittest.TestCase):
         with self.assertRaises(DataCommonsError):
             self.adapter(client).fetch()
 
+    def test_rejects_mixed_observation_dates(self):
+        def mixed_dates(request: httpx.Request) -> httpx.Response:
+            payload = response_for(request).json()
+            payload["byVariable"]["var-5"]["byEntity"]["country/CAN"]["orderedFacets"][0]["observations"][0]["date"] = "2023"
+            return httpx.Response(200, json=payload, request=request)
+
+        client = httpx.Client(transport=httpx.MockTransport(mixed_dates))
+        with self.assertRaisesRegex(DataCommonsError, 'common facet and date'):
+            self.adapter(client).fetch()
+
 
 if __name__ == "__main__":
     unittest.main()
-
