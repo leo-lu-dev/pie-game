@@ -9,6 +9,8 @@ from uuid import uuid4
 import psycopg
 from psycopg.types.json import Jsonb
 
+from .models.candidate import CandidatePuzzle
+
 Decision = Literal['approved', 'rejected', 'needs_review']
 
 
@@ -31,6 +33,31 @@ def candidate_detail(connection: psycopg.Connection[Any], candidate_id: str) -> 
         cursor.execute('SELECT model, prompt_version, verdict, review_json, created_at FROM candidate_agent_reviews WHERE candidate_id = %s ORDER BY created_at DESC', (candidate_id,))
         reviews = list(cursor.fetchall())
     return {'candidate': candidate, 'categories': categories, 'validations': validations, 'reviews': reviews}
+
+
+def candidate_from_detail(detail: dict[str, Any]) -> CandidatePuzzle:
+    """Reconstruct the review model from the persisted candidate records."""
+    candidate = detail['candidate']
+    return CandidatePuzzle.model_validate({
+        'id': candidate['id'],
+        'source_name': candidate['source_name'],
+        'source_dataset_id': candidate['source_dataset_id'],
+        'source_url': candidate['source_url'],
+        'topic': candidate['topic'],
+        'title': candidate['title'],
+        'context': candidate['context'],
+        'geography': candidate['geography'],
+        'time_period': candidate['time_period'],
+        'unit': candidate['unit'],
+        'population_universe': candidate['population_universe'],
+        'transformation_type': candidate['transformation_type'],
+        'categories': [
+            {'id': row['category_key'], 'label': row['label'], 'raw_value': row['raw_value']}
+            for row in detail['categories']
+        ],
+        'transformation_metadata': candidate['transformation_metadata_json'] or {},
+        'source_metadata': candidate['source_metadata_json'] or {},
+    })
 
 
 def record_decision(connection: psycopg.Connection[Any], candidate_id: str, decision: Decision, reviewer: str, notes: str | None = None) -> None:

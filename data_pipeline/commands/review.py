@@ -5,8 +5,13 @@ import json
 from datetime import date, datetime
 from typing import Any
 
+from ..agents.critic import review_candidate
+from ..agents.gemini import GeminiCriticTransport
+from ..agents.prompts import PROMPT_VERSION
+from ..persistence.supabase import persist_agent_review
 from ..persistence.supabase import connect
-from ..review_workflow import candidate_detail, list_candidates, promote_candidate, record_decision
+from ..review_workflow import candidate_detail, candidate_from_detail, list_candidates, promote_candidate, record_decision
+from ..validation import CandidateDiagnostics
 
 
 def json_default(value: Any) -> str:
@@ -26,6 +31,9 @@ def main() -> None:
     decide.add_argument('decision', choices=['approved', 'rejected', 'needs_review'])
     decide.add_argument('--reviewer', required=True)
     decide.add_argument('--notes')
+    agent = actions.add_parser('agent')
+    agent.add_argument('candidate_id')
+    agent.add_argument('--model')
     promote = actions.add_parser('promote')
     promote.add_argument('candidate_id')
     promote.add_argument('--date', type=date.fromisoformat, required=True)
@@ -38,6 +46,15 @@ def main() -> None:
         elif args.action == 'decide':
             record_decision(connection, args.candidate_id, args.decision, args.reviewer, args.notes)
             print(f'Recorded {args.decision} for {args.candidate_id}')
+        elif args.action == 'agent':
+            detail = candidate_detail(connection, args.candidate_id)
+            candidate = candidate_from_detail(detail)
+            validation = detail['validations'][0] if detail['validations'] else None
+            diagnostics = CandidateDiagnostics(**validation['diagnostics_json']) if validation and validation['diagnostics_json'] else None
+            with GeminiCriticTransport.from_env(args.model) as transport:
+                review = review_candidate(candidate, diagnostics, transport)
+            review_id = persist_agent_review(args.candidate_id, review, transport.model, PROMPT_VERSION, connection)
+            print(json.dumps({'reviewId': review_id, 'model': transport.model, 'review': review.model_dump()}, indent=2))
         else:
             slug = promote_candidate(connection, args.candidate_id, args.date)
             print(f'Created scheduled puzzle {slug} for {args.date}; it is not published')
