@@ -2,7 +2,6 @@ import { asc, desc, eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '../../../db/client';
 import { candidateAgentReviews, candidateCategories, candidateValidations, puzzleCandidates } from '../../../db/schema';
-import { fixtures, toPublicPuzzle } from '../../../lib/fixtures';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +23,7 @@ export async function GET() {
       db.select().from(candidateAgentReviews).orderBy(desc(candidateAgentReviews.createdAt)),
     ]);
   } catch {
-    storageWarning = 'Local candidate database is unavailable. Showing built-in fixtures only.';
+    storageWarning = 'Local candidate database is unavailable. No candidates can be loaded.';
   }
   const categoriesByCandidate = new Map<string, typeof categories>();
   categories.forEach(category => {
@@ -35,16 +34,6 @@ export async function GET() {
   const latestReviewByCandidate = new Map<string, typeof reviews[number]>();
   reviews.forEach(review => { if (!latestReviewByCandidate.has(review.candidateId)) latestReviewByCandidate.set(review.candidateId, review); });
 
-  const fixtureItems = Object.values(fixtures).map(fixture => ({
-    kind: 'fixture' as const,
-    id: fixture.id,
-    title: fixture.title,
-    status: 'fixture',
-    humanStatus: null,
-    agentReview: null,
-    puzzle: toPublicPuzzle(fixture),
-    answer: fixture.answer,
-  }));
   const candidateItems = candidates.map(candidate => {
     const candidateCategories = categoriesByCandidate.get(candidate.id) || [];
     const puzzle = {
@@ -68,7 +57,7 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json({ items: [...fixtureItems, ...candidateItems], storageWarning });
+  return NextResponse.json({ items: candidateItems, storageWarning });
 }
 
 export async function POST(request: NextRequest) {

@@ -6,7 +6,7 @@ import type { PublicPuzzle } from '../lib/types';
 
 type Decision = 'approved' | 'rejected';
 type ReviewItem = {
-  kind: 'fixture' | 'candidate';
+  kind: 'candidate';
   id: string;
   title: string;
   status: string;
@@ -16,8 +16,6 @@ type ReviewItem = {
   answer: string[];
 };
 
-const fixtureDecisionKey = (id: string) => `statpie.local-review.${id}`;
-
 export default function LocalReviewMode() {
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [index, setIndex] = useState(0);
@@ -25,11 +23,8 @@ export default function LocalReviewMode() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
-  const [fixtureDecisions, setFixtureDecisions] = useState<Record<string, Decision>>({});
   const item = items[index];
-  const decision = item?.kind === 'fixture'
-    ? fixtureDecisions[item.id] || null
-    : item?.humanStatus || null;
+  const decision = item?.humanStatus || null;
   const progressLabel = useMemo(() => items.length ? `${index + 1} / ${items.length}` : '', [index, items.length]);
 
   useEffect(() => {
@@ -41,12 +36,6 @@ export default function LocalReviewMode() {
       if (!cancelled) {
         setItems(data.items);
         setStorageWarning(data.storageWarning || null);
-        const storedDecisions: Record<string, Decision> = {};
-        data.items.filter(entry => entry.kind === 'fixture').forEach(entry => {
-          const stored = window.localStorage.getItem(fixtureDecisionKey(entry.id));
-          if (stored === 'approved' || stored === 'rejected') storedDecisions[entry.id] = stored;
-        });
-        setFixtureDecisions(storedDecisions);
       }
     }).catch(reason => { if (!cancelled) setError(reason instanceof Error ? reason.message : 'Unable to load local review queue'); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -58,22 +47,17 @@ export default function LocalReviewMode() {
     if (!item || saving) return;
     setSaving(true); setError(null);
     try {
-      if (item.kind === 'fixture') {
-        window.localStorage.setItem(fixtureDecisionKey(item.id), nextDecision);
-        setFixtureDecisions(current => ({ ...current, [item.id]: nextDecision }));
-      } else {
-        const response = await fetch('/api/local-review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: item.kind, id: item.id, decision: nextDecision }) });
-        const data = await response.json() as { error?: string };
-        if (!response.ok) throw new Error(data.error || 'Could not save decision');
-        setItems(current => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, status: nextDecision, humanStatus: nextDecision } : entry));
-      }
+      const response = await fetch('/api/local-review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: item.kind, id: item.id, decision: nextDecision }) });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error || 'Could not save decision');
+      setItems(current => current.map((entry, entryIndex) => entryIndex === index ? { ...entry, status: nextDecision, humanStatus: nextDecision } : entry));
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not save decision'); }
     finally { setSaving(false); }
   }
 
   if (loading) return <main className="mx-auto max-w-xl px-6 py-20 text-center text-sm font-bold text-[#61706a]">Loading local review queue…</main>;
   if (error) return <main className="mx-auto max-w-xl px-6 py-20 text-center"><h1 className="text-2xl font-black">Local review unavailable</h1><p className="mt-3 text-[#61706a]">{error}</p><p className="mt-5 text-sm text-[#61706a]">Check that DATABASE_URL points to your local database and that migrations have been applied.</p></main>;
-  if (!item) return <main className="mx-auto max-w-xl px-6 py-20 text-center"><h1 className="text-2xl font-black">No local review items</h1><p className="mt-3 text-[#61706a]">Add a candidate locally or seed the fixture puzzles.</p></main>;
+  if (!item) return <main className="mx-auto max-w-xl px-6 py-20 text-center"><h1 className="text-2xl font-black">No local candidates</h1><p className="mt-3 text-[#61706a]">Run the local ingestion pipeline to add a candidate for review.</p></main>;
 
   return <main className="min-h-screen bg-[#f8f4ec] px-3 py-4 sm:px-8">
     <header className="mx-auto mb-5 flex max-w-[1440px] items-center justify-between gap-4">
@@ -82,7 +66,7 @@ export default function LocalReviewMode() {
     </header>
     <section className="mx-auto mb-4 flex max-w-[1440px] flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#dce4de] bg-white/70 p-3">
       <button onClick={() => move(-1)} disabled={index === 0} className="rounded-full border border-[#dce4de] px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40">← Back</button>
-      <div className="min-w-0 flex-1 text-center"><p className="truncate text-xs font-bold uppercase tracking-widest text-[#8a9690]">{item.kind === 'candidate' ? 'Candidate' : 'Fixture'} · {item.status}</p><p className="truncate text-sm font-black">{item.title}</p></div>
+      <div className="min-w-0 flex-1 text-center"><p className="truncate text-xs font-bold uppercase tracking-widest text-[#8a9690]">Candidate · {item.status}</p><p className="truncate text-sm font-black">{item.title}</p></div>
       <button onClick={() => move(1)} disabled={index === items.length - 1} className="rounded-full border border-[#dce4de] px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40">Next →</button>
     </section>
     <section className="mx-auto mb-4 flex max-w-[1440px] flex-wrap items-center justify-center gap-3">
