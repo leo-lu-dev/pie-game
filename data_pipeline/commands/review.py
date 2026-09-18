@@ -5,10 +5,10 @@ import json
 from datetime import date, datetime
 from typing import Any
 
-from ..agents.critic import review_candidate
+from ..agents.critic import AgentCriticError, review_candidate
 from ..agents.gemini import GeminiCriticTransport
 from ..agents.prompts import PROMPT_VERSION
-from ..persistence.supabase import persist_agent_review
+from ..persistence.supabase import mark_candidate_needs_review, persist_agent_review
 from ..persistence.supabase import connect
 from ..review_workflow import candidate_detail, candidate_from_detail, list_candidates, promote_candidate, record_decision
 from ..validation import CandidateDiagnostics
@@ -51,8 +51,12 @@ def main() -> None:
             candidate = candidate_from_detail(detail)
             validation = detail['validations'][0] if detail['validations'] else None
             diagnostics = CandidateDiagnostics(**validation['diagnostics_json']) if validation and validation['diagnostics_json'] else None
-            with GeminiCriticTransport.from_env(args.model) as transport:
-                review = review_candidate(candidate, diagnostics, transport)
+            try:
+                with GeminiCriticTransport.from_env(args.model) as transport:
+                    review = review_candidate(candidate, diagnostics, transport)
+            except (AgentCriticError, RuntimeError):
+                mark_candidate_needs_review(args.candidate_id, connection)
+                raise
             review_id = persist_agent_review(args.candidate_id, review, transport.model, PROMPT_VERSION, connection)
             print(json.dumps({'reviewId': review_id, 'model': transport.model, 'review': review.model_dump()}, indent=2))
         else:

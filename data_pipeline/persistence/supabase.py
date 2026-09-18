@@ -85,4 +85,12 @@ def persist_agent_review(candidate_id: str, review: AgentReview, model: str, pro
                 "INSERT INTO candidate_agent_reviews (id, candidate_id, model, prompt_version, verdict, review_json) VALUES (%s, %s, %s, %s, %s, %s)",
                 (review_id, candidate_id, model, prompt_version, review.verdict, _json(review.model_dump())),
             )
+            cursor.execute("UPDATE puzzle_candidates SET status = 'agent_reviewed', updated_at = now() WHERE id = %s AND status <> 'promoted'", (candidate_id,))
     return review_id
+
+
+def mark_candidate_needs_review(candidate_id: str, connection: psycopg.Connection[Any]) -> None:
+    """Keep a valid candidate available when an agent review cannot complete."""
+    with connection.transaction():
+        with connection.cursor() as cursor:
+            cursor.execute("UPDATE puzzle_candidates SET status = 'needs_review', updated_at = now() WHERE id = %s AND status <> 'promoted'", (candidate_id,))
